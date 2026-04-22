@@ -163,10 +163,14 @@ func (m *SandboxManager) syncRoute(ctx context.Context, sbx infra.Sandbox, refre
 // PauseSandbox pauses a sandbox and syncs route with peers
 func (m *SandboxManager) PauseSandbox(ctx context.Context, sbx infra.Sandbox, opts infra.PauseOptions) error {
 	log := klog.FromContext(ctx).WithValues("sandbox", klog.KObj(sbx))
+	start := time.Now()
 	if err := sbx.Pause(ctx, opts); err != nil {
 		log.Error(err, "failed to pause sandbox")
+		SandboxPauseResponses.WithLabelValues("failure").Inc()
 		return err
 	}
+	SandboxPauseResponses.WithLabelValues("success").Inc()
+	SandboxPauseLatency.Observe(float64(time.Since(start).Milliseconds()))
 	if err := m.syncRoute(ctx, sbx, true); err != nil {
 		log.Error(err, "failed to sync route with peers after pause")
 	}
@@ -176,10 +180,14 @@ func (m *SandboxManager) PauseSandbox(ctx context.Context, sbx infra.Sandbox, op
 // ResumeSandbox resumes a sandbox and syncs route with peers
 func (m *SandboxManager) ResumeSandbox(ctx context.Context, sbx infra.Sandbox) error {
 	log := klog.FromContext(ctx).WithValues("sandbox", klog.KObj(sbx))
+	start := time.Now()
 	if err := sbx.Resume(ctx); err != nil {
 		log.Error(err, "failed to resume sandbox")
+		SandboxResumeResponses.WithLabelValues("failure").Inc()
 		return err
 	}
+	SandboxResumeResponses.WithLabelValues("success").Inc()
+	SandboxResumeLatency.Observe(float64(time.Since(start).Milliseconds()))
 	if err := m.syncRoute(ctx, sbx, true); err != nil {
 		log.Error(err, "failed to sync route with peers after resume")
 	}
@@ -194,8 +202,10 @@ func (m *SandboxManager) DeleteSandbox(ctx context.Context, sbx infra.Sandbox) e
 
 	if err := sbx.Kill(ctx); err != nil {
 		log.Error(err, "failed to delete sandbox")
+		SandboxDeleteResponses.WithLabelValues("failure").Inc()
 		return err
 	}
+	SandboxDeleteResponses.WithLabelValues("success").Inc()
 	log.Info("sandbox deleted")
 
 	m.proxy.DeleteRoute(route.ID)

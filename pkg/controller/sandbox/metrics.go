@@ -140,6 +140,82 @@ var (
 		[]string{"namespace", "name"},
 	)
 
+	// sandboxStatusNotReady indicates whether the sandbox is in NotReady condition
+	// (1 when Ready condition status is False, 0 otherwise).
+	sandboxStatusNotReady = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_not_ready",
+			Help: "Whether the sandbox Ready condition is False (1 for False, 0 otherwise)",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusNotReadyTime records the timestamp when Ready condition became False.
+	sandboxStatusNotReadyTime = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_not_ready_time",
+			Help: "Unix timestamp when the sandbox Ready condition transitioned to False",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusPaused indicates whether the sandbox paused condition is True
+	// (1 when SandboxPaused condition status is True, 0 otherwise).
+	sandboxStatusPaused = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_paused",
+			Help: "Whether the sandbox SandboxPaused condition is True (1 for True, 0 otherwise)",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusPausedTime records the timestamp when SandboxPaused condition became True.
+	sandboxStatusPausedTime = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_paused_time",
+			Help: "Unix timestamp when the sandbox SandboxPaused condition transitioned to True",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusResumed indicates whether the sandbox resumed condition is True
+	// (1 when SandboxResumed condition status is True, 0 otherwise).
+	sandboxStatusResumed = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_resumed",
+			Help: "Whether the sandbox SandboxResumed condition is True (1 for True, 0 otherwise)",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusResumedTime records the timestamp when SandboxResumed condition became True.
+	sandboxStatusResumedTime = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_resumed_time",
+			Help: "Unix timestamp when the sandbox SandboxResumed condition transitioned to True",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusInplaceUpdateDone indicates whether the sandbox inplace update condition is True
+	// (1 when InplaceUpdate condition status is True, 0 otherwise).
+	sandboxStatusInplaceUpdateDone = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_inplace_update_done",
+			Help: "Whether the sandbox InplaceUpdate condition is True (1 for True, 0 otherwise)",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusInplaceUpdateDoneTime records the timestamp when InplaceUpdate condition became True.
+	sandboxStatusInplaceUpdateDoneTime = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_inplace_update_done_time",
+			Help: "Unix timestamp when the sandbox InplaceUpdate condition transitioned to True",
+		},
+		[]string{"namespace", "name"},
+	)
+
 	// allPhases enumerates all possible sandbox phases for metric cleanup.
 	allPhases = []agentsv1alpha1.SandboxPhase{
 		agentsv1alpha1.SandboxPending,
@@ -165,6 +241,14 @@ func init() {
 		sandboxStatusUnpausedTime,
 		sandboxStatusUnresumed,
 		sandboxStatusUnresumedTime,
+		sandboxStatusNotReady,
+		sandboxStatusNotReadyTime,
+		sandboxStatusPaused,
+		sandboxStatusPausedTime,
+		sandboxStatusResumed,
+		sandboxStatusResumedTime,
+		sandboxStatusInplaceUpdateDone,
+		sandboxStatusInplaceUpdateDoneTime,
 		sandboxInfo,
 	)
 }
@@ -183,6 +267,18 @@ func boolFloat64(b bool) float64 {
 // the time gauge records the transition timestamp when the condition is False.
 func recordConditionFalseMetric(condition metav1.Condition, statusGauge, timeGauge *prometheus.GaugeVec, namespace, name string) {
 	if condition.Status == metav1.ConditionFalse {
+		statusGauge.WithLabelValues(namespace, name).Set(1)
+		timeGauge.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
+	} else {
+		statusGauge.WithLabelValues(namespace, name).Set(0)
+	}
+}
+
+// recordConditionTrueMetric records a pair of condition metrics following the kube-state-metrics pattern:
+// the status gauge is set to 1 when the condition is True, 0 otherwise;
+// the time gauge records the transition timestamp when the condition is True.
+func recordConditionTrueMetric(condition metav1.Condition, statusGauge, timeGauge *prometheus.GaugeVec, namespace, name string) {
+	if condition.Status == metav1.ConditionTrue {
 		statusGauge.WithLabelValues(namespace, name).Set(1)
 		timeGauge.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
 	} else {
@@ -229,15 +325,19 @@ func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox) {
 			if isReady {
 				sandboxStatusReadyTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
 			}
+			recordConditionFalseMetric(condition, sandboxStatusNotReady, sandboxStatusNotReadyTime, namespace, name)
 
 		case agentsv1alpha1.SandboxConditionInplaceUpdate:
 			recordConditionFalseMetric(condition, sandboxStatusInplaceUpdating, sandboxStatusInplaceUpdatingTime, namespace, name)
+			recordConditionTrueMetric(condition, sandboxStatusInplaceUpdateDone, sandboxStatusInplaceUpdateDoneTime, namespace, name)
 
 		case agentsv1alpha1.SandboxConditionPaused:
 			recordConditionFalseMetric(condition, sandboxStatusUnpaused, sandboxStatusUnpausedTime, namespace, name)
+			recordConditionTrueMetric(condition, sandboxStatusPaused, sandboxStatusPausedTime, namespace, name)
 
 		case agentsv1alpha1.SandboxConditionResumed:
 			recordConditionFalseMetric(condition, sandboxStatusUnresumed, sandboxStatusUnresumedTime, namespace, name)
+			recordConditionTrueMetric(condition, sandboxStatusResumed, sandboxStatusResumedTime, namespace, name)
 		}
 	}
 }
@@ -258,4 +358,12 @@ func deleteSandboxMetrics(namespace, name string) {
 	sandboxStatusUnpausedTime.DeleteLabelValues(namespace, name)
 	sandboxStatusUnresumed.DeleteLabelValues(namespace, name)
 	sandboxStatusUnresumedTime.DeleteLabelValues(namespace, name)
+	sandboxStatusNotReady.DeleteLabelValues(namespace, name)
+	sandboxStatusNotReadyTime.DeleteLabelValues(namespace, name)
+	sandboxStatusPaused.DeleteLabelValues(namespace, name)
+	sandboxStatusPausedTime.DeleteLabelValues(namespace, name)
+	sandboxStatusResumed.DeleteLabelValues(namespace, name)
+	sandboxStatusResumedTime.DeleteLabelValues(namespace, name)
+	sandboxStatusInplaceUpdateDone.DeleteLabelValues(namespace, name)
+	sandboxStatusInplaceUpdateDoneTime.DeleteLabelValues(namespace, name)
 }

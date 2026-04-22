@@ -222,6 +222,7 @@ func TestRecordSandboxMetrics_ReadyConditionTrue(t *testing.T) {
 }
 
 func TestRecordSandboxMetrics_ReadyConditionFalse(t *testing.T) {
+	now := metav1.NewTime(time.Now())
 	sandbox := &agentsv1alpha1.Sandbox{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "notready-sandbox",
@@ -234,7 +235,7 @@ func TestRecordSandboxMetrics_ReadyConditionFalse(t *testing.T) {
 				{
 					Type:               string(agentsv1alpha1.SandboxConditionReady),
 					Status:             metav1.ConditionFalse,
-					LastTransitionTime: metav1.NewTime(time.Now()),
+					LastTransitionTime: now,
 				},
 			},
 		},
@@ -246,6 +247,16 @@ func TestRecordSandboxMetrics_ReadyConditionFalse(t *testing.T) {
 	val := testutil.ToFloat64(sandboxStatusReady.WithLabelValues("default", "notready-sandbox"))
 	if val != 0 {
 		t.Errorf("sandbox_status_ready = %v, want 0", val)
+	}
+
+	// Verify not_ready metrics
+	notReadyVal := testutil.ToFloat64(sandboxStatusNotReady.WithLabelValues("default", "notready-sandbox"))
+	if notReadyVal != 1 {
+		t.Errorf("sandbox_status_not_ready = %v, want 1", notReadyVal)
+	}
+	notReadyTime := testutil.ToFloat64(sandboxStatusNotReadyTime.WithLabelValues("default", "notready-sandbox"))
+	if notReadyTime != float64(now.Unix()) {
+		t.Errorf("sandbox_status_not_ready_time = %v, want %v", notReadyTime, float64(now.Unix()))
 	}
 }
 
@@ -284,6 +295,7 @@ func TestRecordSandboxMetrics_InplaceUpdateConditionFalse(t *testing.T) {
 }
 
 func TestRecordSandboxMetrics_InplaceUpdateConditionTrue(t *testing.T) {
+	now := metav1.NewTime(time.Now())
 	sandbox := &agentsv1alpha1.Sandbox{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "inplace-true-sandbox",
@@ -296,7 +308,7 @@ func TestRecordSandboxMetrics_InplaceUpdateConditionTrue(t *testing.T) {
 				{
 					Type:               string(agentsv1alpha1.SandboxConditionInplaceUpdate),
 					Status:             metav1.ConditionTrue,
-					LastTransitionTime: metav1.NewTime(time.Now()),
+					LastTransitionTime: now,
 				},
 			},
 		},
@@ -308,6 +320,16 @@ func TestRecordSandboxMetrics_InplaceUpdateConditionTrue(t *testing.T) {
 	val := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues("default", "inplace-true-sandbox"))
 	if val != 0 {
 		t.Errorf("sandbox_status_inplace_updating = %v, want 0", val)
+	}
+
+	// Verify inplace_update_done metrics
+	doneVal := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues("default", "inplace-true-sandbox"))
+	if doneVal != 1 {
+		t.Errorf("sandbox_status_inplace_update_done = %v, want 1", doneVal)
+	}
+	doneTime := testutil.ToFloat64(sandboxStatusInplaceUpdateDoneTime.WithLabelValues("default", "inplace-true-sandbox"))
+	if doneTime != float64(now.Unix()) {
+		t.Errorf("sandbox_status_inplace_update_done_time = %v, want %v", doneTime, float64(now.Unix()))
 	}
 }
 
@@ -346,6 +368,7 @@ func TestRecordSandboxMetrics_PausedConditionFalse(t *testing.T) {
 }
 
 func TestRecordSandboxMetrics_PausedConditionTrue(t *testing.T) {
+	now := metav1.NewTime(time.Now())
 	sandbox := &agentsv1alpha1.Sandbox{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "paused-true-sandbox",
@@ -358,7 +381,7 @@ func TestRecordSandboxMetrics_PausedConditionTrue(t *testing.T) {
 				{
 					Type:               string(agentsv1alpha1.SandboxConditionPaused),
 					Status:             metav1.ConditionTrue,
-					LastTransitionTime: metav1.NewTime(time.Now()),
+					LastTransitionTime: now,
 				},
 			},
 		},
@@ -370,6 +393,16 @@ func TestRecordSandboxMetrics_PausedConditionTrue(t *testing.T) {
 	val := testutil.ToFloat64(sandboxStatusUnpaused.WithLabelValues("default", "paused-true-sandbox"))
 	if val != 0 {
 		t.Errorf("sandbox_status_unpaused = %v, want 0", val)
+	}
+
+	// Verify paused metrics
+	pausedVal := testutil.ToFloat64(sandboxStatusPaused.WithLabelValues("default", "paused-true-sandbox"))
+	if pausedVal != 1 {
+		t.Errorf("sandbox_status_paused = %v, want 1", pausedVal)
+	}
+	pausedTime := testutil.ToFloat64(sandboxStatusPausedTime.WithLabelValues("default", "paused-true-sandbox"))
+	if pausedTime != float64(now.Unix()) {
+		t.Errorf("sandbox_status_paused_time = %v, want %v", pausedTime, float64(now.Unix()))
 	}
 }
 
@@ -408,6 +441,7 @@ func TestRecordSandboxMetrics_ResumedConditionFalse(t *testing.T) {
 }
 
 func TestRecordSandboxMetrics_ResumedConditionTrue(t *testing.T) {
+	now := metav1.NewTime(time.Now())
 	sandbox := &agentsv1alpha1.Sandbox{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "resumed-true-sandbox",
@@ -420,7 +454,7 @@ func TestRecordSandboxMetrics_ResumedConditionTrue(t *testing.T) {
 				{
 					Type:               string(agentsv1alpha1.SandboxConditionResumed),
 					Status:             metav1.ConditionTrue,
-					LastTransitionTime: metav1.NewTime(time.Now()),
+					LastTransitionTime: now,
 				},
 			},
 		},
@@ -432,6 +466,16 @@ func TestRecordSandboxMetrics_ResumedConditionTrue(t *testing.T) {
 	val := testutil.ToFloat64(sandboxStatusUnresumed.WithLabelValues("default", "resumed-true-sandbox"))
 	if val != 0 {
 		t.Errorf("sandbox_status_unresumed = %v, want 0", val)
+	}
+
+	// Verify resumed metrics
+	resumedVal := testutil.ToFloat64(sandboxStatusResumed.WithLabelValues("default", "resumed-true-sandbox"))
+	if resumedVal != 1 {
+		t.Errorf("sandbox_status_resumed = %v, want 1", resumedVal)
+	}
+	resumedTime := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues("default", "resumed-true-sandbox"))
+	if resumedTime != float64(now.Unix()) {
+		t.Errorf("sandbox_status_resumed_time = %v, want %v", resumedTime, float64(now.Unix()))
 	}
 }
 
@@ -585,6 +629,403 @@ func TestRecordSandboxMetrics_Info(t *testing.T) {
 		"SandboxSet", "my-sandboxset"))
 	if val != 1 {
 		t.Errorf("sandbox_info = %v, want 1", val)
+	}
+}
+
+func TestRecordConditionTrueMetric(t *testing.T) {
+	statusGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "test_true_condition_status",
+		Help: "test",
+	}, []string{"namespace", "name"})
+	timeGauge := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "test_true_condition_time",
+		Help: "test",
+	}, []string{"namespace", "name"})
+
+	now := metav1.NewTime(time.Now())
+
+	t.Run("condition true sets 1 and timestamp", func(t *testing.T) {
+		cond := metav1.Condition{Status: metav1.ConditionTrue, LastTransitionTime: now}
+		recordConditionTrueMetric(cond, statusGauge, timeGauge, "ns", "sb")
+		if v := testutil.ToFloat64(statusGauge.WithLabelValues("ns", "sb")); v != 1 {
+			t.Errorf("status gauge = %v, want 1", v)
+		}
+		if v := testutil.ToFloat64(timeGauge.WithLabelValues("ns", "sb")); v != float64(now.Unix()) {
+			t.Errorf("time gauge = %v, want %v", v, float64(now.Unix()))
+		}
+	})
+
+	t.Run("condition false sets 0", func(t *testing.T) {
+		cond := metav1.Condition{Status: metav1.ConditionFalse, LastTransitionTime: now}
+		recordConditionTrueMetric(cond, statusGauge, timeGauge, "ns", "sb2")
+		if v := testutil.ToFloat64(statusGauge.WithLabelValues("ns", "sb2")); v != 0 {
+			t.Errorf("status gauge = %v, want 0", v)
+		}
+	})
+}
+
+func TestRecordSandboxMetrics_NotReadyCondition(t *testing.T) {
+	tests := []struct {
+		name            string
+		status          metav1.ConditionStatus
+		wantNotReady    float64
+		wantNotReadyTS  bool
+	}{
+		{name: "Ready=False sets not_ready=1 with timestamp", status: metav1.ConditionFalse, wantNotReady: 1, wantNotReadyTS: true},
+		{name: "Ready=True sets not_ready=0", status: metav1.ConditionTrue, wantNotReady: 0, wantNotReadyTS: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := metav1.NewTime(time.Now())
+			sbName := "notready-cond-" + string(tt.status)
+			sandbox := &agentsv1alpha1.Sandbox{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              sbName,
+					Namespace:         "default",
+					CreationTimestamp: metav1.NewTime(time.Now()),
+				},
+				Status: agentsv1alpha1.SandboxStatus{
+					Phase: agentsv1alpha1.SandboxRunning,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(agentsv1alpha1.SandboxConditionReady),
+							Status:             tt.status,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+
+			recordSandboxMetrics(sandbox)
+			defer deleteSandboxMetrics("default", sbName)
+
+			val := testutil.ToFloat64(sandboxStatusNotReady.WithLabelValues("default", sbName))
+			if val != tt.wantNotReady {
+				t.Errorf("sandbox_status_not_ready = %v, want %v", val, tt.wantNotReady)
+			}
+			if tt.wantNotReadyTS {
+				ts := testutil.ToFloat64(sandboxStatusNotReadyTime.WithLabelValues("default", sbName))
+				if ts != float64(now.Unix()) {
+					t.Errorf("sandbox_status_not_ready_time = %v, want %v", ts, float64(now.Unix()))
+				}
+			}
+		})
+	}
+}
+
+func TestRecordSandboxMetrics_PausedConditionTrueTimestamp(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       metav1.ConditionStatus
+		wantPaused   float64
+		wantPausedTS bool
+	}{
+		{name: "Paused=True sets paused=1 with timestamp", status: metav1.ConditionTrue, wantPaused: 1, wantPausedTS: true},
+		{name: "Paused=False sets paused=0", status: metav1.ConditionFalse, wantPaused: 0, wantPausedTS: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := metav1.NewTime(time.Now())
+			sbName := "paused-ts-" + string(tt.status)
+			sandbox := &agentsv1alpha1.Sandbox{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              sbName,
+					Namespace:         "default",
+					CreationTimestamp: metav1.NewTime(time.Now()),
+				},
+				Status: agentsv1alpha1.SandboxStatus{
+					Phase: agentsv1alpha1.SandboxPaused,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(agentsv1alpha1.SandboxConditionPaused),
+							Status:             tt.status,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+
+			recordSandboxMetrics(sandbox)
+			defer deleteSandboxMetrics("default", sbName)
+
+			val := testutil.ToFloat64(sandboxStatusPaused.WithLabelValues("default", sbName))
+			if val != tt.wantPaused {
+				t.Errorf("sandbox_status_paused = %v, want %v", val, tt.wantPaused)
+			}
+			if tt.wantPausedTS {
+				ts := testutil.ToFloat64(sandboxStatusPausedTime.WithLabelValues("default", sbName))
+				if ts != float64(now.Unix()) {
+					t.Errorf("sandbox_status_paused_time = %v, want %v", ts, float64(now.Unix()))
+				}
+			}
+		})
+	}
+}
+
+func TestRecordSandboxMetrics_ResumedConditionTrueTimestamp(t *testing.T) {
+	tests := []struct {
+		name          string
+		status        metav1.ConditionStatus
+		wantResumed   float64
+		wantResumedTS bool
+	}{
+		{name: "Resumed=True sets resumed=1 with timestamp", status: metav1.ConditionTrue, wantResumed: 1, wantResumedTS: true},
+		{name: "Resumed=False sets resumed=0", status: metav1.ConditionFalse, wantResumed: 0, wantResumedTS: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := metav1.NewTime(time.Now())
+			sbName := "resumed-ts-" + string(tt.status)
+			sandbox := &agentsv1alpha1.Sandbox{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              sbName,
+					Namespace:         "default",
+					CreationTimestamp: metav1.NewTime(time.Now()),
+				},
+				Status: agentsv1alpha1.SandboxStatus{
+					Phase: agentsv1alpha1.SandboxRunning,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(agentsv1alpha1.SandboxConditionResumed),
+							Status:             tt.status,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+
+			recordSandboxMetrics(sandbox)
+			defer deleteSandboxMetrics("default", sbName)
+
+			val := testutil.ToFloat64(sandboxStatusResumed.WithLabelValues("default", sbName))
+			if val != tt.wantResumed {
+				t.Errorf("sandbox_status_resumed = %v, want %v", val, tt.wantResumed)
+			}
+			if tt.wantResumedTS {
+				ts := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues("default", sbName))
+				if ts != float64(now.Unix()) {
+					t.Errorf("sandbox_status_resumed_time = %v, want %v", ts, float64(now.Unix()))
+				}
+			}
+		})
+	}
+}
+
+func TestRecordSandboxMetrics_InplaceUpdateConditionTrueTimestamp(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     metav1.ConditionStatus
+		wantDone   float64
+		wantDoneTS bool
+	}{
+		{name: "InplaceUpdate=True sets done=1 with timestamp", status: metav1.ConditionTrue, wantDone: 1, wantDoneTS: true},
+		{name: "InplaceUpdate=False sets done=0", status: metav1.ConditionFalse, wantDone: 0, wantDoneTS: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := metav1.NewTime(time.Now())
+			sbName := "inplace-done-" + string(tt.status)
+			sandbox := &agentsv1alpha1.Sandbox{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              sbName,
+					Namespace:         "default",
+					CreationTimestamp: metav1.NewTime(time.Now()),
+				},
+				Status: agentsv1alpha1.SandboxStatus{
+					Phase: agentsv1alpha1.SandboxRunning,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(agentsv1alpha1.SandboxConditionInplaceUpdate),
+							Status:             tt.status,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			}
+
+			recordSandboxMetrics(sandbox)
+			defer deleteSandboxMetrics("default", sbName)
+
+			val := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues("default", sbName))
+			if val != tt.wantDone {
+				t.Errorf("sandbox_status_inplace_update_done = %v, want %v", val, tt.wantDone)
+			}
+			if tt.wantDoneTS {
+				ts := testutil.ToFloat64(sandboxStatusInplaceUpdateDoneTime.WithLabelValues("default", sbName))
+				if ts != float64(now.Unix()) {
+					t.Errorf("sandbox_status_inplace_update_done_time = %v, want %v", ts, float64(now.Unix()))
+				}
+			}
+		})
+	}
+}
+
+func TestDeleteSandboxMetrics_NewMetrics(t *testing.T) {
+	ns, name := "default", "delete-new-metrics-sandbox"
+	now := metav1.NewTime(time.Now())
+	sandbox := &agentsv1alpha1.Sandbox{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			Namespace:         ns,
+			CreationTimestamp: metav1.NewTime(time.Now()),
+		},
+		Status: agentsv1alpha1.SandboxStatus{
+			Phase: agentsv1alpha1.SandboxRunning,
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionReady),
+					Status:             metav1.ConditionFalse,
+					LastTransitionTime: now,
+				},
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionPaused),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: now,
+				},
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionResumed),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: now,
+				},
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionInplaceUpdate),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: now,
+				},
+			},
+		},
+	}
+
+	recordSandboxMetrics(sandbox)
+
+	// Verify new metrics are set
+	if v := testutil.ToFloat64(sandboxStatusNotReady.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_not_ready before delete = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusPaused.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_paused before delete = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusResumed.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_resumed before delete = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_inplace_update_done before delete = %v, want 1", v)
+	}
+
+	// Delete and verify cleanup
+	deleteSandboxMetrics(ns, name)
+
+	if v := testutil.ToFloat64(sandboxStatusNotReady.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_not_ready after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusNotReadyTime.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_not_ready_time after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusPaused.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_paused after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusPausedTime.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_paused_time after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusResumed.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_resumed after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_resumed_time after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_inplace_update_done after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDoneTime.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_inplace_update_done_time after delete = %v, want 0", v)
+	}
+}
+
+func TestRecordSandboxMetrics_AllConditionsBidirectional(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+	ns, name := "default", "bidir-sandbox"
+	sandbox := &agentsv1alpha1.Sandbox{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			Namespace:         ns,
+			CreationTimestamp: metav1.NewTime(time.Now()),
+		},
+		Status: agentsv1alpha1.SandboxStatus{
+			Phase: agentsv1alpha1.SandboxRunning,
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionReady),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: now,
+				},
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionPaused),
+					Status:             metav1.ConditionFalse,
+					LastTransitionTime: now,
+				},
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionResumed),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: now,
+				},
+				{
+					Type:               string(agentsv1alpha1.SandboxConditionInplaceUpdate),
+					Status:             metav1.ConditionFalse,
+					LastTransitionTime: now,
+				},
+			},
+		},
+	}
+
+	recordSandboxMetrics(sandbox)
+	defer deleteSandboxMetrics(ns, name)
+
+	// Ready=True: ready=1, not_ready=0
+	if v := testutil.ToFloat64(sandboxStatusReady.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_ready = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusNotReady.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_not_ready = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusReadyTime.WithLabelValues(ns, name)); v != float64(now.Unix()) {
+		t.Errorf("sandbox_status_ready_time = %v, want %v", v, float64(now.Unix()))
+	}
+
+	// Paused=False: unpaused=1, paused=0
+	if v := testutil.ToFloat64(sandboxStatusUnpaused.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_unpaused = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusPaused.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_paused = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusUnpausedTime.WithLabelValues(ns, name)); v != float64(now.Unix()) {
+		t.Errorf("sandbox_status_unpaused_time = %v, want %v", v, float64(now.Unix()))
+	}
+
+	// Resumed=True: unresumed=0, resumed=1
+	if v := testutil.ToFloat64(sandboxStatusUnresumed.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_unresumed = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusResumed.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_resumed = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues(ns, name)); v != float64(now.Unix()) {
+		t.Errorf("sandbox_status_resumed_time = %v, want %v", v, float64(now.Unix()))
+	}
+
+	// InplaceUpdate=False: inplace_updating=1, inplace_update_done=0
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_inplace_updating = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_inplace_update_done = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdatingTime.WithLabelValues(ns, name)); v != float64(now.Unix()) {
+		t.Errorf("sandbox_status_inplace_updating_time = %v, want %v", v, float64(now.Unix()))
 	}
 }
 
