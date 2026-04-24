@@ -30,6 +30,7 @@ see-also:
       - [Story 2: SRE Alerts on SandboxSet Available Replica Shortage](#story-2-sre-alerts-on-sandboxset-available-replica-shortage)
       - [Story 3: Developer Analyzes SandboxClaim Efficiency](#story-3-developer-analyzes-sandboxclaim-efficiency)
       - [Story 4: Operator Detects Abnormal Pause/Resume Operations](#story-4-operator-detects-abnormal-pauseresume-operations)
+    - [All Metrics Summary](#all-metrics-summary)
     - [Design Details](#design-details)
       - [Sandbox Controller Metrics](#sandbox-controller-metrics)
       - [SandboxSet Controller Metrics](#sandboxset-controller-metrics)
@@ -106,6 +107,65 @@ As a developer integrating with the E2B SDK, I want to analyze how long SandboxC
 #### Story 4: Operator Detects Abnormal Pause/Resume Operations
 
 As an operator, I want to monitor Sandbox Manager API metrics to detect unusual spikes in pause or resume operation failures, so that I can quickly identify and troubleshoot platform issues. I can track `rate(sandbox_pause_responses{result="failure"}[5m])` for anomaly detection.
+
+### All Metrics Summary
+
+The following table provides a comprehensive overview of all Prometheus metrics exposed by the OpenKruise Agents platform.
+
+| Component | Metric Name | Type | Labels | Description |
+|---|---|---|---|---|
+| Sandbox Controller | `sandbox_info` | Gauge | `namespace`, `name`, `created_by_kind`, `created_by_name` | Information about the sandbox (always 1). |
+| Sandbox Controller | `sandbox_created` | Gauge | `namespace`, `name` | Unix creation timestamp of the sandbox. |
+| Sandbox Controller | `sandbox_deletion_timestamp` | Gauge | `namespace`, `name` | Unix deletion timestamp of the sandbox. |
+| Sandbox Controller | `sandbox_status_phase` | Gauge | `namespace`, `name`, `phase` | Current phase of the sandbox (1 for active phase). |
+| Sandbox Controller | `sandbox_status_ready` | Gauge | `namespace`, `name` | Whether the Ready condition is True (1) or not (0). |
+| Sandbox Controller | `sandbox_status_ready_time` | Gauge | `namespace`, `name` | Unix timestamp of last transition to Ready=True. |
+| Sandbox Controller | `sandbox_status_paused` | Gauge | `namespace`, `name` | Whether the SandboxPaused condition is True (1) or not (0). |
+| Sandbox Controller | `sandbox_status_paused_time` | Gauge | `namespace`, `name` | Unix timestamp of last transition to SandboxPaused=True. |
+| Sandbox Controller | `sandbox_status_resumed` | Gauge | `namespace`, `name` | Whether the SandboxResumed condition is True (1) or not (0). |
+| Sandbox Controller | `sandbox_status_resumed_time` | Gauge | `namespace`, `name` | Unix timestamp of last transition to SandboxResumed=True. |
+| Sandbox Controller | `sandbox_status_inplace_update_done` | Gauge | `namespace`, `name` | Whether the InplaceUpdate condition is True (1) or not (0). |
+| Sandbox Controller | `sandbox_status_inplace_update_done_time` | Gauge | `namespace`, `name` | Unix timestamp of last transition to InplaceUpdate=True. |
+| Sandbox Controller | `sandbox_creation_duration_seconds` | Histogram | ConstLabels: `source="k8s"` | Duration from sandbox creation to Ready condition (seconds). |
+| Sandbox Controller | `sandbox_inplace_update_duration_seconds` | Histogram | — | Duration of in-place update operations (seconds). |
+| Sandbox Controller | `sandbox_labels` | Gauge | `namespace`, `name`, `label_<key>` (dynamic, opt-in) | Sandbox labels as Prometheus labels. Controlled via `--metric-labels-allowlist`. |
+| SandboxSet Controller | `sandboxset_created` | Gauge | `namespace`, `name` | Unix creation timestamp of the SandboxSet. |
+| SandboxSet Controller | `sandboxset_replicas` | Gauge | `namespace`, `name` | Current total number of replicas. |
+| SandboxSet Controller | `sandboxset_available_replicas` | Gauge | `namespace`, `name` | Number of available replicas ready to be claimed. |
+| SandboxSet Controller | `sandboxset_desired_replicas` | Gauge | `namespace`, `name` | Desired replica count from spec.replicas. |
+| SandboxSet Controller | `sandboxset_updated_replicas` | Gauge | `namespace`, `name` | Number of replicas updated to the latest revision. |
+| SandboxSet Controller | `sandboxset_updated_available_replicas` | Gauge | `namespace`, `name` | Number of updated replicas that are also available. |
+| SandboxClaim Controller | `sandboxclaim_info` | Gauge | `namespace`, `name`, `template_name` | SandboxClaim metadata info (always 1). |
+| SandboxClaim Controller | `sandboxclaim_created` | Gauge | `namespace`, `name` | Unix creation timestamp of the SandboxClaim. |
+| SandboxClaim Controller | `sandboxclaim_status_phase` | Gauge | `namespace`, `name`, `phase` | Current phase of the claim (1 for active phase). |
+| SandboxClaim Controller | `sandboxclaim_claim_start_time` | Gauge | `namespace`, `name` | Unix timestamp when claiming started. |
+| SandboxClaim Controller | `sandboxclaim_completion_time` | Gauge | `namespace`, `name` | Unix timestamp when claim reached Completed. |
+| SandboxClaim Controller | `sandboxclaim_claimed_replicas` | Gauge | `namespace`, `name` | Current number of successfully claimed replicas. |
+| SandboxClaim Controller | `sandboxclaim_desired_replicas` | Gauge | `namespace`, `name` | Desired number of replicas to claim. |
+| SandboxClaim Controller | `sandboxclaim_claim_duration_seconds` | Histogram | — | Duration of claim from start to completion (seconds). |
+| Sandbox Manager | `sandbox_creation_duration_seconds` | Histogram | ConstLabels: `source="e2b"` | Duration of sandbox creation via E2B API (seconds). |
+| Sandbox Manager | `sandbox_creation_responses` | Counter | `result` | Total number of sandbox creation responses. |
+| Sandbox Manager | `sandbox_pause_duration_seconds` | Histogram | ConstLabels: `source="e2b"` | Duration of sandbox pause operations (seconds). |
+| Sandbox Manager | `sandbox_pause_responses` | Counter | `result` | Total number of sandbox pause responses. |
+| Sandbox Manager | `sandbox_resume_duration_seconds` | Histogram | ConstLabels: `source="e2b"` | Duration of sandbox resume operations (seconds). |
+| Sandbox Manager | `sandbox_resume_responses` | Counter | `result` | Total number of sandbox resume responses. |
+| Sandbox Manager | `sandbox_delete_duration_seconds` | Histogram | ConstLabels: `source="e2b"` | Duration of sandbox delete operations (seconds). |
+| Sandbox Manager | `sandbox_delete_responses` | Counter | `result` | Total number of sandbox delete responses. |
+| Sandbox Manager | `sandbox_claim_duration_seconds` | Histogram | — | Claim operation total duration (seconds). |
+| Sandbox Manager | `sandbox_claim_stage_duration_seconds` | Histogram | `stage` | Claim per-stage duration (seconds). |
+| Sandbox Manager | `sandbox_claim_total` | Counter | `result`, `lock_type` | Total number of claim operations. |
+| Sandbox Manager | `sandbox_claim_retries` | Histogram | — | Distribution of retry counts per claim operation. |
+| Sandbox Manager | `sandbox_clone_duration_seconds` | Histogram | — | Clone operation total duration (seconds). |
+| Sandbox Manager | `sandbox_clone_stage_duration_seconds` | Histogram | `stage` | Clone per-stage duration (seconds). |
+| Sandbox Manager | `sandbox_clone_total` | Counter | `result` | Total number of clone operations. |
+| Sandbox Manager | `sandbox_route_sync_duration_seconds` | Histogram | `type` | Route sync operation duration (seconds). |
+| Sandbox Manager | `sandbox_route_sync_total` | Counter | `type`, `result` | Total number of route sync operations. |
+| Proxy | `sandbox_routes_total` | Gauge | — | Current number of routes in the routing table. |
+| Proxy | `sandbox_peers_total` | Gauge | — | Current number of connected peer nodes. |
+| E2B Server | `sandbox_snapshot_duration_seconds` | Histogram | — | Duration of snapshot creation operations (seconds). |
+| E2B Server | `sandbox_snapshot_total` | Counter | `result` | Total number of snapshot operations. |
+
+**Summary**: 50 metrics total — 28 Gauge, 13 Histogram, 9 Counter — across 6 components.
 
 ### Design Details
 
