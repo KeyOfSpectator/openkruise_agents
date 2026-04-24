@@ -40,12 +40,6 @@ func (m *SandboxManager) ClaimSandbox(ctx context.Context, opts infra.ClaimSandb
 	SandboxClaimDuration.Observe(claimMetrics.Total.Seconds())
 	SandboxClaimTotal.WithLabelValues("success", string(claimMetrics.LockType)).Inc()
 	SandboxClaimRetries.Observe(float64(claimMetrics.Retries))
-	SandboxClaimStageDuration.WithLabelValues("wait").Observe(claimMetrics.Wait.Seconds())
-	SandboxClaimStageDuration.WithLabelValues("retry_cost").Observe(claimMetrics.RetryCost.Seconds())
-	SandboxClaimStageDuration.WithLabelValues("pick_and_lock").Observe(claimMetrics.PickAndLock.Seconds())
-	SandboxClaimStageDuration.WithLabelValues("wait_ready").Observe(claimMetrics.WaitReady.Seconds())
-	SandboxClaimStageDuration.WithLabelValues("init_runtime").Observe(claimMetrics.InitRuntime.Seconds())
-	SandboxClaimStageDuration.WithLabelValues("csi_mount").Observe(claimMetrics.CSIMount.Seconds())
 
 	state, reason := sandbox.GetState()
 	log.Info("sandbox claimed", "sandbox", klog.KObj(sandbox), "metrics", claimMetrics.String(), "state", state, "reason", reason)
@@ -74,12 +68,6 @@ func (m *SandboxManager) CloneSandbox(ctx context.Context, opts infra.CloneSandb
 	// Clone-specific metrics
 	SandboxCloneDuration.Observe(cloneMetrics.Total.Seconds())
 	SandboxCloneTotal.WithLabelValues("success").Inc()
-	SandboxCloneStageDuration.WithLabelValues("wait").Observe(cloneMetrics.Wait.Seconds())
-	SandboxCloneStageDuration.WithLabelValues("get_template").Observe(cloneMetrics.GetTemplate.Seconds())
-	SandboxCloneStageDuration.WithLabelValues("create_sandbox").Observe(cloneMetrics.CreateSandbox.Seconds())
-	SandboxCloneStageDuration.WithLabelValues("wait_ready").Observe(cloneMetrics.WaitReady.Seconds())
-	SandboxCloneStageDuration.WithLabelValues("init_runtime").Observe(cloneMetrics.InitRuntime.Seconds())
-	SandboxCloneStageDuration.WithLabelValues("csi_mount").Observe(cloneMetrics.CSIMount.Seconds())
 
 	state, reason := sandbox.GetState()
 	log.Info("sandbox cloned", "sandbox", klog.KObj(sandbox), "metrics", cloneMetrics.String(), "state", state, "reason", reason)

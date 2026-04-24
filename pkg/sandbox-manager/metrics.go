@@ -83,16 +83,6 @@ var (
 		},
 	)
 
-	// SandboxClaimStageDuration tracks the duration of each claim stage
-	SandboxClaimStageDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "sandbox_claim_stage_duration_seconds",
-			Help:    "Duration of each claim stage in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.001, 2, 12),
-		},
-		[]string{"stage"},
-	)
-
 	// SandboxClaimTotal tracks total claim operations by result and lock type
 	SandboxClaimTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -120,16 +110,6 @@ var (
 			Help:    "Total clone operation duration in seconds",
 			Buckets: prometheus.ExponentialBuckets(0.01, 2, 10),
 		},
-	)
-
-	// SandboxCloneStageDuration tracks the duration of each clone stage
-	SandboxCloneStageDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "sandbox_clone_stage_duration_seconds",
-			Help:    "Duration of each clone stage in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.001, 2, 12),
-		},
-		[]string{"stage"},
 	)
 
 	// SandboxCloneTotal tracks total clone operations by result
@@ -182,9 +162,9 @@ func init() {
 		SandboxResumeDuration, SandboxResumeResponses,
 		SandboxDeleteResponses,
 		// Claim
-		SandboxClaimDuration, SandboxClaimStageDuration, SandboxClaimTotal, SandboxClaimRetries,
+		SandboxClaimDuration, SandboxClaimTotal, SandboxClaimRetries,
 		// Clone
-		SandboxCloneDuration, SandboxCloneStageDuration, SandboxCloneTotal,
+		SandboxCloneDuration, SandboxCloneTotal,
 		// Delete duration
 		SandboxDeleteDuration,
 		// Route sync

@@ -83,31 +83,11 @@ var (
 		[]string{"namespace", "name"},
 	)
 
-	// sandboxStatusPaused indicates whether the sandbox paused condition is True
-	// (1 when SandboxPaused condition status is True, 0 otherwise).
-	sandboxStatusPaused = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "sandbox_status_paused",
-			Help: "Whether the sandbox SandboxPaused condition is True (1 for True, 0 otherwise)",
-		},
-		[]string{"namespace", "name"},
-	)
-
 	// sandboxStatusPausedTime records the timestamp when SandboxPaused condition became True.
 	sandboxStatusPausedTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "sandbox_status_paused_time",
 			Help: "Unix timestamp when the sandbox SandboxPaused condition transitioned to True",
-		},
-		[]string{"namespace", "name"},
-	)
-
-	// sandboxStatusResumed indicates whether the sandbox resumed condition is True
-	// (1 when SandboxResumed condition status is True, 0 otherwise).
-	sandboxStatusResumed = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "sandbox_status_resumed",
-			Help: "Whether the sandbox SandboxResumed condition is True (1 for True, 0 otherwise)",
 		},
 		[]string{"namespace", "name"},
 	)
@@ -159,6 +139,26 @@ var (
 		},
 	)
 
+	// sandbox_pause_duration_seconds tracks pause operation duration with source=k8s label.
+	sandboxPauseDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:        "sandbox_pause_duration_seconds",
+			Help:        "Duration of sandbox pause operations from start to completion in seconds",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
+			Buckets:     []float64{1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
+		},
+	)
+
+	// sandbox_resume_duration_seconds tracks resume operation duration with source=k8s label.
+	sandboxResumeDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:        "sandbox_resume_duration_seconds",
+			Help:        "Duration of sandbox resume operations from start to completion in seconds",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
+			Buckets:     []float64{1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
+		},
+	)
+
 	// allPhases enumerates all possible sandbox phases for metric cleanup.
 	allPhases = []agentsv1alpha1.SandboxPhase{
 		agentsv1alpha1.SandboxPending,
@@ -183,6 +183,18 @@ var inplaceUpdateStartTimes sync.Map
 // duration observed, preventing duplicate histogram observations.
 var observedInplaceUpdateDurations sync.Map
 
+// pauseStartTimes tracks the start time of pause operations
+var pauseStartTimes sync.Map
+
+// observedPauseDurations tracks which sandboxes have had their pause duration observed
+var observedPauseDurations sync.Map
+
+// resumeStartTimes tracks the start time of resume operations
+var resumeStartTimes sync.Map
+
+// observedResumeDurations tracks which sandboxes have had their resume duration observed
+var observedResumeDurations sync.Map
+
 // sandboxLabels is the opt-in metric that exposes sandbox labels as Prometheus labels,
 // controlled via --metric-labels-allowlist flag, following the kube_pod_labels pattern.
 var sandboxLabels *prometheus.GaugeVec
@@ -197,15 +209,15 @@ func init() {
 		sandboxStatusPhase,
 		sandboxStatusReady,
 		sandboxStatusReadyTime,
-		sandboxStatusPaused,
 		sandboxStatusPausedTime,
-		sandboxStatusResumed,
 		sandboxStatusResumedTime,
 		sandboxStatusInplaceUpdateDone,
 		sandboxStatusInplaceUpdateDoneTime,
 		sandboxInfo,
 		sandboxCreationDuration,
 		sandboxInplaceUpdateDuration,
+		sandboxPauseDuration,
+		sandboxResumeDuration,
 	)
 }
 
@@ -336,10 +348,48 @@ func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox) {
 			}
 
 		case agentsv1alpha1.SandboxConditionPaused:
-			recordConditionTrueMetric(condition, sandboxStatusPaused, sandboxStatusPausedTime, namespace, name)
+			// Record paused_time timestamp when condition is True
+			if condition.Status == metav1.ConditionTrue {
+				sandboxStatusPausedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
+			}
+			// Track pause duration (similar to InplaceUpdate pattern)
+			key := namespace + "/" + name
+			if condition.Status == metav1.ConditionFalse {
+				// Pause initiated - store start time
+				pauseStartTimes.Store(key, condition.LastTransitionTime.Time)
+				// Reset observed flag for new pause cycle
+				observedPauseDurations.Delete(key)
+			} else if condition.Status == metav1.ConditionTrue {
+				// Pause completed - observe duration
+				if startTime, ok := pauseStartTimes.Load(key); ok {
+					if _, observed := observedPauseDurations.LoadOrStore(key, true); !observed {
+						duration := condition.LastTransitionTime.Sub(startTime.(time.Time))
+						sandboxPauseDuration.Observe(duration.Seconds())
+					}
+				}
+			}
 
 		case agentsv1alpha1.SandboxConditionResumed:
-			recordConditionTrueMetric(condition, sandboxStatusResumed, sandboxStatusResumedTime, namespace, name)
+			// Record resumed_time timestamp when condition is True
+			if condition.Status == metav1.ConditionTrue {
+				sandboxStatusResumedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
+			}
+			// Track resume duration (similar to InplaceUpdate pattern)
+			key := namespace + "/" + name
+			if condition.Status == metav1.ConditionFalse {
+				// Resume initiated - store start time
+				resumeStartTimes.Store(key, condition.LastTransitionTime.Time)
+				// Reset observed flag for new resume cycle
+				observedResumeDurations.Delete(key)
+			} else if condition.Status == metav1.ConditionTrue {
+				// Resume completed - observe duration
+				if startTime, ok := resumeStartTimes.Load(key); ok {
+					if _, observed := observedResumeDurations.LoadOrStore(key, true); !observed {
+						duration := condition.LastTransitionTime.Sub(startTime.(time.Time))
+						sandboxResumeDuration.Observe(duration.Seconds())
+					}
+				}
+			}
 		}
 	}
 
@@ -363,9 +413,7 @@ func deleteSandboxMetrics(namespace, name string) {
 	}
 	sandboxStatusReady.DeleteLabelValues(namespace, name)
 	sandboxStatusReadyTime.DeleteLabelValues(namespace, name)
-	sandboxStatusPaused.DeleteLabelValues(namespace, name)
 	sandboxStatusPausedTime.DeleteLabelValues(namespace, name)
-	sandboxStatusResumed.DeleteLabelValues(namespace, name)
 	sandboxStatusResumedTime.DeleteLabelValues(namespace, name)
 	sandboxStatusInplaceUpdateDone.DeleteLabelValues(namespace, name)
 	sandboxStatusInplaceUpdateDoneTime.DeleteLabelValues(namespace, name)
@@ -378,4 +426,8 @@ func deleteSandboxMetrics(namespace, name string) {
 	observedCreationToReady.Delete(key)
 	inplaceUpdateStartTimes.Delete(key)
 	observedInplaceUpdateDurations.Delete(key)
+	pauseStartTimes.Delete(key)
+	observedPauseDurations.Delete(key)
+	resumeStartTimes.Delete(key)
+	observedResumeDurations.Delete(key)
 }
