@@ -32,7 +32,7 @@ var (
 			Name: "sandboxclaim_info",
 			Help: "Information about the sandbox claim",
 		},
-		[]string{"namespace", "name", "template_name"},
+		[]string{"namespace", "name", "template_name", "uid"},
 	)
 
 	// sandboxClaimCreated records the creation timestamp of a sandbox claim.
@@ -130,7 +130,7 @@ func recordSandboxClaimMetrics(claim *agentsv1alpha1.SandboxClaim) {
 	name := claim.Name
 
 	// sandboxclaim_info
-	sandboxClaimInfo.WithLabelValues(namespace, name, claim.Spec.TemplateName).Set(1)
+	sandboxClaimInfo.WithLabelValues(namespace, name, claim.Spec.TemplateName, string(claim.UID)).Set(1)
 
 	// sandboxclaim_created
 	sandboxClaimCreated.WithLabelValues(namespace, name).Set(float64(claim.CreationTimestamp.Unix()))

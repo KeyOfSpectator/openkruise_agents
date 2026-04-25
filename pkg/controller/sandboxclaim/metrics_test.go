@@ -23,6 +23,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	agentsv1alpha1 "github.com/openkruise/agents/api/v1alpha1"
@@ -63,6 +64,7 @@ func TestRecordSandboxClaimMetrics_ClaimingPhase(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "test-claim",
 			Namespace:         "default",
+			UID:               types.UID("claim-uid-001"),
 			CreationTimestamp: metav1.NewTime(now),
 		},
 		Spec: agentsv1alpha1.SandboxClaimSpec{
@@ -80,7 +82,7 @@ func TestRecordSandboxClaimMetrics_ClaimingPhase(t *testing.T) {
 	defer deleteSandboxClaimMetrics("default", "test-claim")
 
 	// Verify info metric
-	infoVal := testutil.ToFloat64(sandboxClaimInfo.WithLabelValues("default", "test-claim", "my-sandboxset"))
+	infoVal := testutil.ToFloat64(sandboxClaimInfo.WithLabelValues("default", "test-claim", "my-sandboxset", "claim-uid-001"))
 	if infoVal != 1 {
 		t.Errorf("sandboxclaim_info = %v, want 1", infoVal)
 	}
@@ -128,6 +130,7 @@ func TestRecordSandboxClaimMetrics_CompletedPhase(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "completed-claim",
 			Namespace:         "default",
+			UID:               types.UID("claim-uid-002"),
 			CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Minute)),
 		},
 		Spec: agentsv1alpha1.SandboxClaimSpec{
@@ -167,6 +170,7 @@ func TestRecordSandboxClaimMetrics_EmptyPhase(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "empty-phase-claim",
 			Namespace:         "default",
+			UID:               types.UID("claim-uid-003"),
 			CreationTimestamp: metav1.NewTime(time.Now()),
 		},
 		Spec: agentsv1alpha1.SandboxClaimSpec{
@@ -191,6 +195,7 @@ func TestDeleteSandboxClaimMetrics(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Namespace:         ns,
+			UID:               types.UID("claim-uid-004"),
 			CreationTimestamp: metav1.NewTime(now),
 		},
 		Spec: agentsv1alpha1.SandboxClaimSpec{
@@ -214,7 +219,7 @@ func TestDeleteSandboxClaimMetrics(t *testing.T) {
 		t.Fatal("sandboxclaim_created should be set before delete")
 	}
 
-	infoVal := testutil.ToFloat64(sandboxClaimInfo.WithLabelValues(ns, name, "my-sandboxset"))
+	infoVal := testutil.ToFloat64(sandboxClaimInfo.WithLabelValues(ns, name, "my-sandboxset", "claim-uid-004"))
 	if infoVal != 1 {
 		t.Errorf("sandboxclaim_info before delete = %v, want 1", infoVal)
 	}
@@ -269,6 +274,7 @@ func TestSandboxClaimClaimDuration_ObservedOnce(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "duration-test-claim",
 			Namespace:         "default",
+			UID:               types.UID("claim-uid-005"),
 			CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Minute)),
 		},
 		Spec: agentsv1alpha1.SandboxClaimSpec{
@@ -323,6 +329,7 @@ func TestSandboxClaimClaimDuration_NotObservedForClaimingPhase(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "claiming-phase-claim",
 			Namespace:         "default",
+			UID:               types.UID("claim-uid-006"),
 			CreationTimestamp: metav1.NewTime(now),
 		},
 		Spec: agentsv1alpha1.SandboxClaimSpec{

@@ -34,7 +34,7 @@ var (
 			Name: "sandbox_info",
 			Help: "Information about the sandbox",
 		},
-		[]string{"namespace", "name", "created_by_kind", "created_by_name"},
+		[]string{"namespace", "name", "created_by_kind", "created_by_name", "node", "pod_uid", "sandbox_template"},
 	)
 
 	// sandboxCreated records the creation timestamp of a sandbox.
@@ -291,7 +291,10 @@ func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox) {
 		createdByKind = controller.Kind
 		createdByName = controller.Name
 	}
-	sandboxInfo.WithLabelValues(namespace, name, createdByKind, createdByName).Set(1)
+	node := sandbox.Status.NodeName
+	podUID := string(sandbox.Status.PodInfo.PodUID)
+	sandboxTemplate := sandbox.Labels[agentsv1alpha1.LabelSandboxTemplate]
+	sandboxInfo.WithLabelValues(namespace, name, createdByKind, createdByName, node, podUID, sandboxTemplate).Set(1)
 
 	// sandbox_created: creation timestamp
 	sandboxCreated.WithLabelValues(namespace, name).Set(float64(sandbox.CreationTimestamp.Unix()))

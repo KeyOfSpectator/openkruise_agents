@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	agentsv1alpha1 "github.com/openkruise/agents/api/v1alpha1"
 )
@@ -495,7 +496,7 @@ func TestDeleteSandboxMetrics(t *testing.T) {
 	}
 
 	// Verify sandbox_info is set
-	infoVal := testutil.ToFloat64(sandboxInfo.WithLabelValues(ns, name, "", ""))
+	infoVal := testutil.ToFloat64(sandboxInfo.WithLabelValues(ns, name, "", "", "", "", ""))
 	if infoVal != 1 {
 		t.Errorf("sandbox_info before delete = %v, want 1", infoVal)
 	}
@@ -531,9 +532,16 @@ func TestRecordSandboxMetrics_Info(t *testing.T) {
 					Controller: boolPtr(true),
 				},
 			},
+			Labels: map[string]string{
+				agentsv1alpha1.LabelSandboxTemplate: "my-template",
+			},
 		},
 		Status: agentsv1alpha1.SandboxStatus{
-			Phase: agentsv1alpha1.SandboxRunning,
+			Phase:    agentsv1alpha1.SandboxRunning,
+			NodeName: "node-1",
+			PodInfo: agentsv1alpha1.PodInfo{
+				PodUID: types.UID("abc-123"),
+			},
 		},
 	}
 
@@ -541,7 +549,7 @@ func TestRecordSandboxMetrics_Info(t *testing.T) {
 	defer deleteSandboxMetrics("default", "info-sandbox")
 
 	val := testutil.ToFloat64(sandboxInfo.WithLabelValues("default", "info-sandbox",
-		"SandboxSet", "my-sandboxset"))
+		"SandboxSet", "my-sandboxset", "node-1", "abc-123", "my-template"))
 	if val != 1 {
 		t.Errorf("sandbox_info = %v, want 1", val)
 	}
@@ -864,10 +872,88 @@ func TestRecordSandboxMetrics_InfoNoOwner(t *testing.T) {
 	recordSandboxMetrics(sandbox)
 	defer deleteSandboxMetrics("default", "info-no-owner-sandbox")
 
+	// All new labels should be empty string when not set
 	val := testutil.ToFloat64(sandboxInfo.WithLabelValues("default", "info-no-owner-sandbox",
-		"", ""))
+		"", "", "", "", ""))
 	if val != 1 {
 		t.Errorf("sandbox_info with no owner = %v, want 1", val)
+	}
+}
+
+func TestRecordSandboxMetrics_InfoPartialFields(t *testing.T) {
+	tests := []struct {
+		name            string
+		nodeName        string
+		podUID          types.UID
+		templateLabel   string
+		wantNode        string
+		wantPodUID      string
+		wantTemplate    string
+	}{
+		{
+			name:         "node set, no pod UID, no template label",
+			nodeName:     "worker-1",
+			wantNode:     "worker-1",
+			wantPodUID:   "",
+			wantTemplate: "",
+		},
+		{
+			name:         "pod UID set, no node, no template label",
+			podUID:       types.UID("uid-456"),
+			wantNode:     "",
+			wantPodUID:   "uid-456",
+			wantTemplate: "",
+		},
+		{
+			name:          "template label set, no node, no pod UID",
+			templateLabel: "tmpl-a",
+			wantNode:      "",
+			wantPodUID:    "",
+			wantTemplate:  "tmpl-a",
+		},
+		{
+			name:          "all fields set",
+			nodeName:      "node-x",
+			podUID:        types.UID("uid-789"),
+			templateLabel: "tmpl-b",
+			wantNode:      "node-x",
+			wantPodUID:    "uid-789",
+			wantTemplate:  "tmpl-b",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sbName := "info-partial-" + tt.name
+			labels := map[string]string{}
+			if tt.templateLabel != "" {
+				labels[agentsv1alpha1.LabelSandboxTemplate] = tt.templateLabel
+			}
+			sandbox := &agentsv1alpha1.Sandbox{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              sbName,
+					Namespace:         "default",
+					CreationTimestamp: metav1.NewTime(time.Now()),
+					Labels:            labels,
+				},
+				Status: agentsv1alpha1.SandboxStatus{
+					Phase:    agentsv1alpha1.SandboxRunning,
+					NodeName: tt.nodeName,
+					PodInfo: agentsv1alpha1.PodInfo{
+						PodUID: tt.podUID,
+					},
+				},
+			}
+
+			recordSandboxMetrics(sandbox)
+			defer deleteSandboxMetrics("default", sbName)
+
+			val := testutil.ToFloat64(sandboxInfo.WithLabelValues("default", sbName,
+				"", "", tt.wantNode, tt.wantPodUID, tt.wantTemplate))
+			if val != 1 {
+				t.Errorf("sandbox_info = %v, want 1", val)
+			}
+		})
 	}
 }
 

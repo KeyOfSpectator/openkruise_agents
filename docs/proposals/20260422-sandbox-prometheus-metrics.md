@@ -114,7 +114,7 @@ The following table provides a comprehensive overview of all Prometheus metrics 
 
 | Component | Metric Name | Type | Labels | Description |
 |---|---|---|---|---|
-| Sandbox Controller | `sandbox_info` | Gauge | `namespace`, `name`, `created_by_kind`, `created_by_name` | Information about the sandbox (always 1). |
+| Sandbox Controller | `sandbox_info` | Gauge | `namespace`, `name`, `created_by_kind`, `created_by_name`, `node`, `pod_uid`, `sandbox_template` | Information about the sandbox (always 1). |
 | Sandbox Controller | `sandbox_created` | Gauge | `namespace`, `name` | Unix creation timestamp of the sandbox. |
 | Sandbox Controller | `sandbox_deletion_timestamp` | Gauge | `namespace`, `name` | Unix deletion timestamp of the sandbox. |
 | Sandbox Controller | `sandbox_status_phase` | Gauge | `namespace`, `name`, `phase` | Current phase of the sandbox (1 for active phase). |
@@ -135,7 +135,7 @@ The following table provides a comprehensive overview of all Prometheus metrics 
 | SandboxSet Controller | `sandboxset_desired_replicas` | Gauge | `namespace`, `name` | Desired replica count from spec.replicas. |
 | SandboxSet Controller | `sandboxset_updated_replicas` | Gauge | `namespace`, `name` | Number of replicas updated to the latest revision. |
 | SandboxSet Controller | `sandboxset_updated_available_replicas` | Gauge | `namespace`, `name` | Number of updated replicas that are also available. |
-| SandboxClaim Controller | `sandboxclaim_info` | Gauge | `namespace`, `name`, `template_name` | SandboxClaim metadata info (always 1). |
+| SandboxClaim Controller | `sandboxclaim_info` | Gauge | `namespace`, `name`, `template_name`, `uid` | SandboxClaim metadata info (always 1). |
 | SandboxClaim Controller | `sandboxclaim_created` | Gauge | `namespace`, `name` | Unix creation timestamp of the SandboxClaim. |
 | SandboxClaim Controller | `sandboxclaim_status_phase` | Gauge | `namespace`, `name`, `phase` | Current phase of the claim (1 for active phase). |
 | SandboxClaim Controller | `sandboxclaim_claim_start_time` | Gauge | `namespace`, `name` | Unix timestamp when claiming started. |
@@ -175,7 +175,7 @@ The Sandbox controller exposes the following metrics for each Sandbox resource:
 
 | Metric Name | Type | Labels | Description |
 |---|---|---|---|
-| `sandbox_info` | Gauge | `namespace`, `name`, `created_by_kind`, `created_by_name` | Sandbox metadata info metric (always 1). Includes owner reference labels for identifying which SandboxSet or SandboxClaim created the sandbox. |
+| `sandbox_info` | Gauge | `namespace`, `name`, `created_by_kind`, `created_by_name`, `node`, `pod_uid`, `sandbox_template` | Sandbox metadata info metric (always 1). Includes owner reference labels for identifying which SandboxSet or SandboxClaim created the sandbox. `node` is the node name from `status.nodeName`. `pod_uid` is the underlying Pod UID from `status.podInfo.podUID`, used for precise Pod correlation. `sandbox_template` is the SandboxTemplate name from label `agents.kruise.io/sandbox-template`. |
 | `sandbox_created` | Gauge | `namespace`, `name` | Unix creation timestamp of the sandbox (`metadata.creationTimestamp`). |
 | `sandbox_deletion_timestamp` | Gauge | `namespace`, `name` | Unix deletion timestamp of the sandbox (`metadata.deletionTimestamp`). Only set when the sandbox is being deleted. |
 | `sandbox_status_phase` | Gauge | `namespace`, `name`, `phase` | Current phase of the sandbox. Following the `kube_pod_status_phase` pattern, only the active phase is emitted with value `1`; stale phase series are deleted to reduce cardinality. |
@@ -278,7 +278,7 @@ The SandboxClaim controller exposes the following metrics for each SandboxClaim 
 
 | Metric Name | Type | Labels | Description |
 |---|---|---|---|
-| `sandboxclaim_info` | Gauge | `namespace`, `name`, `template_name` | SandboxClaim metadata info metric (always 1). Includes `template_name` label identifying which SandboxSet pool is being claimed from. |
+| `sandboxclaim_info` | Gauge | `namespace`, `name`, `template_name`, `uid` | SandboxClaim metadata info metric (always 1). Includes `template_name` label identifying which SandboxSet pool is being claimed from. `uid` is the SandboxClaim resource UID from `metadata.uid`, used for precise deduplication and correlation. |
 | `sandboxclaim_created` | Gauge | `namespace`, `name` | Unix creation timestamp of the SandboxClaim. |
 | `sandboxclaim_status_phase` | Gauge | `namespace`, `name`, `phase` | Current phase of the claim. Uses the same compact pattern as `sandbox_status_phase`: only the active phase is emitted with value `1`; stale phase series are deleted to reduce cardinality. |
 | `sandboxclaim_claim_start_time` | Gauge | `namespace`, `name` | Unix timestamp when the claiming process started (`status.claimStartTime`). |
@@ -522,7 +522,7 @@ histogram_quantile(0.99, rate(sandbox_inplace_update_duration_seconds_bucket[5m]
 
 1. **Metric lifecycle management**: Every metrics file implements a paired `record*Metrics()` / `delete*Metrics()` function set. The record function is called on each successful Reconcile. The delete function is called when the resource is confirmed deleted. This ensures no orphaned time series remain after resource deletion.
 
-2. **Label cardinality**: The primary label dimensions are `namespace` and `name`, whose cardinality is proportional to the number of live resources. The `phase` label has a fixed set of values (7 for Sandbox, 2 for SandboxClaim). The `created_by_kind` and `created_by_name` labels on `sandbox_info` are cleaned up via `DeletePartialMatch` since they have variable values. Overall cardinality is well-controlled.
+2. **Label cardinality**: The primary label dimensions are `namespace` and `name`, whose cardinality is proportional to the number of live resources. The `phase` label has a fixed set of values (7 for Sandbox, 2 for SandboxClaim). The `created_by_kind`, `created_by_name`, `node`, `pod_uid`, and `sandbox_template` labels on `sandbox_info` are cleaned up via `DeletePartialMatch` since they have variable values. The `uid` label on `sandboxclaim_info` has 1:1 cardinality with the resource itself. Overall cardinality is well-controlled.
 
 3. **Thread safety**: All metric operations use `prometheus.GaugeVec`, `prometheus.CounterVec`, and `prometheus.Histogram` from the Prometheus client library, which are inherently concurrent-safe. The `WithLabelValues().Set()` / `.Inc()` / `.Observe()` operations use internal sync mechanisms (atomic operations and mutexes).
 
