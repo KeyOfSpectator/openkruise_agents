@@ -518,6 +518,34 @@ histogram_quantile(0.99, sum(rate(sandbox_pause_duration_seconds_bucket[5m])) by
 histogram_quantile(0.99, rate(sandbox_inplace_update_duration_seconds_bucket[5m]))
 ```
 
+##### Phase Duration Analysis (via Timestamp Subtraction)
+
+By subtracting existing timestamp metrics, you can calculate how long a Sandbox stays in each phase without any additional metrics:
+
+```promql
+# Pending 阶段时长（从创建到就绪）
+sandbox_status_ready_time - sandbox_created
+
+# Running 阶段时长（从就绪到被暂停，首次运行周期）
+sandbox_status_paused_time - sandbox_status_ready_time
+
+# Paused 阶段时长（从暂停完成到恢复完成）
+sandbox_status_resumed_time - sandbox_status_paused_time
+
+# 完整生命周期时长（从创建到删除）
+sandbox_deletion_timestamp - sandbox_created
+
+# Running 阶段时长（恢复后到再次暂停或删除）
+# 需结合 sandbox_status_resumed_time 和后续事件时间戳
+```
+
+> **Notes**:
+>
+> - The queries above are based on the timestamp chain: `sandbox_created` → `sandbox_status_ready_time` → `sandbox_status_paused_time` → `sandbox_status_resumed_time` → `sandbox_deletion_timestamp`.
+> - Timestamp metrics only record the most recent transition value; in multiple pause/resume cycles, earlier timestamps are overwritten.
+> - The per-operation latency distribution for each pause/resume can be analyzed via the `sandbox_pause_duration_seconds` and `sandbox_resume_duration_seconds` Histograms.
+> - Paused duration (`resumed_time - paused_time`) includes both the waiting time and the Resuming operation time. To isolate the Resuming operation latency alone, use the `sandbox_resume_duration_seconds` Histogram.
+
 ### Implementation Details/Notes/Constraints
 
 1. **Metric lifecycle management**: Every metrics file implements a paired `record*Metrics()` / `delete*Metrics()` function set. The record function is called on each successful Reconcile. The delete function is called when the resource is confirmed deleted. This ensures no orphaned time series remain after resource deletion.
