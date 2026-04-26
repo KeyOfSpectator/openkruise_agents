@@ -96,7 +96,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "sandboxclaim_claim_duration_seconds",
 			Help:    "Duration of sandbox claim operations from start to completion in seconds",
-			Buckets: []float64{1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
+			Buckets: prometheus.ExponentialBuckets(0.1, 2, 15),
 		},
 	)
 
@@ -189,11 +189,3 @@ func deleteSandboxClaimMetrics(namespace, name string) {
 	observedClaimDurations.Delete(namespace + "/" + name)
 }
 
-// boolFloat64 converts a boolean to a float64 value (1.0 for true, 0.0 for false),
-// following the kube-state-metrics convention.
-func boolFloat64(b bool) float64 {
-	if b {
-		return 1
-	}
-	return 0
-}

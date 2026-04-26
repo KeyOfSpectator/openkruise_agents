@@ -34,7 +34,7 @@ var (
 			Name: "sandbox_info",
 			Help: "Information about the sandbox",
 		},
-		[]string{"namespace", "name", "created_by_kind", "created_by_name", "node", "pod_uid", "sandbox_template"},
+		[]string{"namespace", "name", "sandbox_pool", "node", "pod_uid", "sandbox_template"},
 	)
 
 	// sandboxCreated records the creation timestamp of a sandbox.
@@ -126,7 +126,7 @@ var (
 			Name:        "sandbox_creation_duration_seconds",
 			Help:        "Duration from sandbox creation to Ready condition in seconds",
 			ConstLabels: prometheus.Labels{"source": "k8s"},
-			Buckets:     []float64{1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
+			Buckets:     prometheus.ExponentialBuckets(0.1, 2, 15),
 		},
 	)
 
@@ -135,7 +135,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "sandbox_inplace_update_duration_seconds",
 			Help:    "Duration of in-place update operations from start to completion in seconds",
-			Buckets: []float64{1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
+			Buckets: prometheus.ExponentialBuckets(0.1, 2, 15),
 		},
 	)
 
@@ -145,7 +145,7 @@ var (
 			Name:        "sandbox_pause_duration_seconds",
 			Help:        "Duration of sandbox pause operations from start to completion in seconds",
 			ConstLabels: prometheus.Labels{"source": "k8s"},
-			Buckets:     []float64{1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
+			Buckets:     prometheus.ExponentialBuckets(0.1, 2, 15),
 		},
 	)
 
@@ -155,7 +155,7 @@ var (
 			Name:        "sandbox_resume_duration_seconds",
 			Help:        "Duration of sandbox resume operations from start to completion in seconds",
 			ConstLabels: prometheus.Labels{"source": "k8s"},
-			Buckets:     []float64{1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
+			Buckets:     prometheus.ExponentialBuckets(0.1, 2, 15),
 		},
 	)
 
@@ -280,21 +280,40 @@ func recordConditionTrueMetric(condition metav1.Condition, statusGauge, timeGaug
 	}
 }
 
+// recordConditionDuration tracks the duration between a condition transitioning from False to True.
+// It stores the start time when the condition becomes False, and observes the duration histogram
+// when the condition becomes True (exactly once per transition cycle).
+func recordConditionDuration(
+	condition metav1.Condition,
+	key string,
+	startTimes *sync.Map,
+	observedDurations *sync.Map,
+	histogram prometheus.Observer,
+) {
+	if condition.Status == metav1.ConditionFalse {
+		startTimes.Store(key, condition.LastTransitionTime.Time)
+		observedDurations.Delete(key)
+	} else if condition.Status == metav1.ConditionTrue {
+		if startTime, ok := startTimes.Load(key); ok {
+			if _, observed := observedDurations.LoadOrStore(key, true); !observed {
+				duration := condition.LastTransitionTime.Sub(startTime.(time.Time))
+				histogram.Observe(duration.Seconds())
+			}
+		}
+	}
+}
+
 // recordSandboxMetrics updates all sandbox lifecycle metrics based on the current sandbox state.
 func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox) {
 	namespace := sandbox.Namespace
 	name := sandbox.Name
 
 	// sandbox_info: sandbox metadata
-	var createdByKind, createdByName string
-	if controller := metav1.GetControllerOfNoCopy(sandbox); controller != nil {
-		createdByKind = controller.Kind
-		createdByName = controller.Name
-	}
+	sandboxPool := sandbox.Labels[agentsv1alpha1.LabelSandboxPool]
 	node := sandbox.Status.NodeName
 	podUID := string(sandbox.Status.PodInfo.PodUID)
 	sandboxTemplate := sandbox.Labels[agentsv1alpha1.LabelSandboxTemplate]
-	sandboxInfo.WithLabelValues(namespace, name, createdByKind, createdByName, node, podUID, sandboxTemplate).Set(1)
+	sandboxInfo.WithLabelValues(namespace, name, sandboxPool, node, podUID, sandboxTemplate).Set(1)
 
 	// sandbox_created: creation timestamp
 	sandboxCreated.WithLabelValues(namespace, name).Set(float64(sandbox.CreationTimestamp.Unix()))
@@ -335,64 +354,24 @@ func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox) {
 
 		case agentsv1alpha1.SandboxConditionInplaceUpdate:
 			recordConditionTrueMetric(condition, sandboxStatusInplaceUpdateDone, sandboxStatusInplaceUpdateDoneTime, namespace, name)
-
 			key := namespace + "/" + name
-			if condition.Status == metav1.ConditionFalse {
-				// Store the start time when in-place update begins
-				inplaceUpdateStartTimes.Store(key, condition.LastTransitionTime.Time)
-			} else if condition.Status == metav1.ConditionTrue {
-				// Observe duration when in-place update completes (once)
-				if startTime, ok := inplaceUpdateStartTimes.Load(key); ok {
-					if _, observed := observedInplaceUpdateDurations.LoadOrStore(key, true); !observed {
-						duration := condition.LastTransitionTime.Sub(startTime.(time.Time))
-						sandboxInplaceUpdateDuration.Observe(duration.Seconds())
-					}
-				}
-			}
+			recordConditionDuration(condition, key, &inplaceUpdateStartTimes, &observedInplaceUpdateDurations, sandboxInplaceUpdateDuration)
 
 		case agentsv1alpha1.SandboxConditionPaused:
 			// Record paused_time timestamp when condition is True
 			if condition.Status == metav1.ConditionTrue {
 				sandboxStatusPausedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
 			}
-			// Track pause duration (similar to InplaceUpdate pattern)
 			key := namespace + "/" + name
-			if condition.Status == metav1.ConditionFalse {
-				// Pause initiated - store start time
-				pauseStartTimes.Store(key, condition.LastTransitionTime.Time)
-				// Reset observed flag for new pause cycle
-				observedPauseDurations.Delete(key)
-			} else if condition.Status == metav1.ConditionTrue {
-				// Pause completed - observe duration
-				if startTime, ok := pauseStartTimes.Load(key); ok {
-					if _, observed := observedPauseDurations.LoadOrStore(key, true); !observed {
-						duration := condition.LastTransitionTime.Sub(startTime.(time.Time))
-						sandboxPauseDuration.Observe(duration.Seconds())
-					}
-				}
-			}
+			recordConditionDuration(condition, key, &pauseStartTimes, &observedPauseDurations, sandboxPauseDuration)
 
 		case agentsv1alpha1.SandboxConditionResumed:
 			// Record resumed_time timestamp when condition is True
 			if condition.Status == metav1.ConditionTrue {
 				sandboxStatusResumedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
 			}
-			// Track resume duration (similar to InplaceUpdate pattern)
 			key := namespace + "/" + name
-			if condition.Status == metav1.ConditionFalse {
-				// Resume initiated - store start time
-				resumeStartTimes.Store(key, condition.LastTransitionTime.Time)
-				// Reset observed flag for new resume cycle
-				observedResumeDurations.Delete(key)
-			} else if condition.Status == metav1.ConditionTrue {
-				// Resume completed - observe duration
-				if startTime, ok := resumeStartTimes.Load(key); ok {
-					if _, observed := observedResumeDurations.LoadOrStore(key, true); !observed {
-						duration := condition.LastTransitionTime.Sub(startTime.(time.Time))
-						sandboxResumeDuration.Observe(duration.Seconds())
-					}
-				}
-			}
+			recordConditionDuration(condition, key, &resumeStartTimes, &observedResumeDurations, sandboxResumeDuration)
 		}
 	}
 

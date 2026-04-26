@@ -496,7 +496,7 @@ func TestDeleteSandboxMetrics(t *testing.T) {
 	}
 
 	// Verify sandbox_info is set
-	infoVal := testutil.ToFloat64(sandboxInfo.WithLabelValues(ns, name, "", "", "", "", ""))
+	infoVal := testutil.ToFloat64(sandboxInfo.WithLabelValues(ns, name, "", "", "", ""))
 	if infoVal != 1 {
 		t.Errorf("sandbox_info before delete = %v, want 1", infoVal)
 	}
@@ -525,15 +525,9 @@ func TestRecordSandboxMetrics_Info(t *testing.T) {
 			Name:              "info-sandbox",
 			Namespace:         "default",
 			CreationTimestamp: metav1.NewTime(time.Now()),
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Kind:       "SandboxSet",
-					Name:       "my-sandboxset",
-					Controller: boolPtr(true),
-				},
-			},
 			Labels: map[string]string{
 				agentsv1alpha1.LabelSandboxTemplate: "my-template",
+				agentsv1alpha1.LabelSandboxPool:     "my-sandboxset",
 			},
 		},
 		Status: agentsv1alpha1.SandboxStatus{
@@ -549,7 +543,7 @@ func TestRecordSandboxMetrics_Info(t *testing.T) {
 	defer deleteSandboxMetrics("default", "info-sandbox")
 
 	val := testutil.ToFloat64(sandboxInfo.WithLabelValues("default", "info-sandbox",
-		"SandboxSet", "my-sandboxset", "node-1", "abc-123", "my-template"))
+		"my-sandboxset", "node-1", "abc-123", "my-template"))
 	if val != 1 {
 		t.Errorf("sandbox_info = %v, want 1", val)
 	}
@@ -874,7 +868,7 @@ func TestRecordSandboxMetrics_InfoNoOwner(t *testing.T) {
 
 	// All new labels should be empty string when not set
 	val := testutil.ToFloat64(sandboxInfo.WithLabelValues("default", "info-no-owner-sandbox",
-		"", "", "", "", ""))
+		"", "", "", ""))
 	if val != 1 {
 		t.Errorf("sandbox_info with no owner = %v, want 1", val)
 	}
@@ -949,7 +943,7 @@ func TestRecordSandboxMetrics_InfoPartialFields(t *testing.T) {
 			defer deleteSandboxMetrics("default", sbName)
 
 			val := testutil.ToFloat64(sandboxInfo.WithLabelValues("default", sbName,
-				"", "", tt.wantNode, tt.wantPodUID, tt.wantTemplate))
+				"", tt.wantNode, tt.wantPodUID, tt.wantTemplate))
 			if val != 1 {
 				t.Errorf("sandbox_info = %v, want 1", val)
 			}

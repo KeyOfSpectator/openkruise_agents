@@ -39,24 +39,6 @@ func histogramSum(t *testing.T) float64 {
 	return m.GetHistogram().GetSampleSum()
 }
 
-func TestBoolFloat64(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    bool
-		expected float64
-	}{
-		{name: "true returns 1", input: true, expected: 1},
-		{name: "false returns 0", input: false, expected: 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := boolFloat64(tt.input); got != tt.expected {
-				t.Errorf("boolFloat64(%v) = %v, want %v", tt.input, got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestRecordSandboxClaimMetrics_ClaimingPhase(t *testing.T) {
 	now := time.Now()
 	startTime := metav1.NewTime(now.Add(-30 * time.Second))

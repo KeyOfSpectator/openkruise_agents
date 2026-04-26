@@ -85,13 +85,17 @@ func (r *commonControl) EnsureSandboxRunning(ctx context.Context, args EnsureFun
 			cond.LastTransitionTime = pCond.LastTransitionTime
 		}
 		utils.SetSandboxCondition(newStatus, *cond)
-		updateCond := metav1.Condition{
-			Type:               string(agentsv1alpha1.SandboxConditionInplaceUpdate),
-			Status:             metav1.ConditionTrue,
-			Reason:             agentsv1alpha1.SandboxInplaceUpdateReasonSucceeded,
-			LastTransitionTime: metav1.Now(),
+		// Only set InplaceUpdate=True if there's already an InplaceUpdate condition
+		// (meaning an inplace update was actually in progress)
+		if existingCond := utils.GetSandboxCondition(newStatus, string(agentsv1alpha1.SandboxConditionInplaceUpdate)); existingCond != nil {
+			updateCond := metav1.Condition{
+				Type:               string(agentsv1alpha1.SandboxConditionInplaceUpdate),
+				Status:             metav1.ConditionTrue,
+				Reason:             agentsv1alpha1.SandboxInplaceUpdateReasonSucceeded,
+				LastTransitionTime: metav1.Now(),
+			}
+			utils.SetSandboxCondition(newStatus, updateCond)
 		}
-		utils.SetSandboxCondition(newStatus, updateCond)
 		// update sandbox status
 		newStatus.NodeName = pod.Spec.NodeName
 		newStatus.SandboxIp = pod.Status.PodIP
