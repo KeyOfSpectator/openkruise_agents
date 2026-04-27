@@ -29,8 +29,9 @@ var (
 	// sandboxClaimInfo records sandbox claim metadata as metric labels.
 	sandboxClaimInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandboxclaim_info",
-			Help: "Information about the sandbox claim",
+			Name:        "sandbox_claim_info",
+			Help:        "Information about the sandbox claim",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
 		[]string{"namespace", "name", "template_name", "uid"},
 	)
@@ -38,8 +39,9 @@ var (
 	// sandboxClaimCreated records the creation timestamp of a sandbox claim.
 	sandboxClaimCreated = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandboxclaim_created",
-			Help: "Unix creation timestamp of the sandbox claim",
+			Name:        "sandbox_claim_created",
+			Help:        "Unix creation timestamp of the sandbox claim",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
 		[]string{"namespace", "name"},
 	)
@@ -47,8 +49,9 @@ var (
 	// sandboxClaimStatusPhase represents the current phase of a sandbox claim.
 	sandboxClaimStatusPhase = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandboxclaim_status_phase",
-			Help: "The current phase of the sandbox claim (1 for active phase)",
+			Name:        "sandbox_claim_status_phase",
+			Help:        "The current phase of the sandbox claim (1 for active phase)",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
 		[]string{"namespace", "name", "phase"},
 	)
@@ -56,8 +59,9 @@ var (
 	// sandboxClaimClaimStartTime records the timestamp when claiming started.
 	sandboxClaimClaimStartTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandboxclaim_claim_start_time",
-			Help: "Unix timestamp when the sandbox claim started claiming",
+			Name:        "sandbox_claim_start_time",
+			Help:        "Unix timestamp when the sandbox claim started claiming",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
 		[]string{"namespace", "name"},
 	)
@@ -65,8 +69,9 @@ var (
 	// sandboxClaimCompletionTime records the timestamp when the claim completed.
 	sandboxClaimCompletionTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandboxclaim_completion_time",
-			Help: "Unix timestamp when the sandbox claim completed",
+			Name:        "sandbox_claim_completion_time",
+			Help:        "Unix timestamp when the sandbox claim completed",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
 		[]string{"namespace", "name"},
 	)
@@ -74,8 +79,9 @@ var (
 	// sandboxClaimClaimedReplicas tracks the number of claimed replicas.
 	sandboxClaimClaimedReplicas = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandboxclaim_claimed_replicas",
-			Help: "Current number of claimed replicas in the sandbox claim",
+			Name:        "sandbox_claim_claimed_replicas",
+			Help:        "Current number of claimed replicas in the sandbox claim",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
 		[]string{"namespace", "name"},
 	)
@@ -83,8 +89,9 @@ var (
 	// sandboxClaimDesiredReplicas tracks the desired number of replicas.
 	sandboxClaimDesiredReplicas = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandboxclaim_desired_replicas",
-			Help: "Desired number of replicas in the sandbox claim",
+			Name:        "sandbox_claim_desired_replicas",
+			Help:        "Desired number of replicas in the sandbox claim",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
 		[]string{"namespace", "name"},
 	)
@@ -94,9 +101,10 @@ var (
 	// This is observed exactly once per claim when it first reaches Completed phase.
 	sandboxClaimClaimDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "sandboxclaim_claim_duration_seconds",
-			Help:    "Duration of sandbox claim operations from start to completion in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.1, 2, 15),
+			Name:        "sandbox_claim_duration_seconds",
+			Help:        "Duration of sandbox claim operations from start to completion in seconds",
+			ConstLabels: prometheus.Labels{"source": "k8s"},
+			Buckets:     prometheus.ExponentialBuckets(0.01, 2, 10), // 10ms -> 40s
 		},
 	)
 
@@ -129,13 +137,13 @@ func recordSandboxClaimMetrics(claim *agentsv1alpha1.SandboxClaim) {
 	namespace := claim.Namespace
 	name := claim.Name
 
-	// sandboxclaim_info
+	// sandbox_claim_info
 	sandboxClaimInfo.WithLabelValues(namespace, name, claim.Spec.TemplateName, string(claim.UID)).Set(1)
 
-	// sandboxclaim_created
+	// sandbox_claim_created
 	sandboxClaimCreated.WithLabelValues(namespace, name).Set(float64(claim.CreationTimestamp.Unix()))
 
-	// sandboxclaim_status_phase: Only emit the current phase (value=1), delete stale phase series to reduce cardinality.
+	// sandbox_claim_status_phase: Only emit the current phase (value=1), delete stale phase series to reduce cardinality.
 	currentPhase := claim.Status.Phase
 	if currentPhase != "" {
 		for _, p := range allClaimPhases {
@@ -146,25 +154,25 @@ func recordSandboxClaimMetrics(claim *agentsv1alpha1.SandboxClaim) {
 		sandboxClaimStatusPhase.WithLabelValues(namespace, name, string(currentPhase)).Set(1)
 	}
 
-	// sandboxclaim_claim_start_time
+	// sandbox_claim_start_time
 	if claim.Status.ClaimStartTime != nil {
 		sandboxClaimClaimStartTime.WithLabelValues(namespace, name).Set(float64(claim.Status.ClaimStartTime.Unix()))
 	}
 
-	// sandboxclaim_completion_time
+	// sandbox_claim_completion_time
 	if claim.Status.CompletionTime != nil {
 		sandboxClaimCompletionTime.WithLabelValues(namespace, name).Set(float64(claim.Status.CompletionTime.Unix()))
 	}
 
-	// sandboxclaim_claimed_replicas
+	// sandbox_claim_claimed_replicas
 	sandboxClaimClaimedReplicas.WithLabelValues(namespace, name).Set(float64(claim.Status.ClaimedReplicas))
 
-	// sandboxclaim_desired_replicas
+	// sandbox_claim_desired_replicas
 	if claim.Spec.Replicas != nil {
 		sandboxClaimDesiredReplicas.WithLabelValues(namespace, name).Set(float64(*claim.Spec.Replicas))
 	}
 
-	// sandboxclaim_claim_duration_seconds - observe once when claim completes
+	// sandbox_claim_duration_seconds - observe once when claim completes
 	if claim.Status.Phase == agentsv1alpha1.SandboxClaimPhaseCompleted &&
 		claim.Status.ClaimStartTime != nil && claim.Status.CompletionTime != nil {
 		key := namespace + "/" + name
@@ -188,4 +196,3 @@ func deleteSandboxClaimMetrics(namespace, name string) {
 	sandboxClaimDesiredReplicas.DeleteLabelValues(namespace, name)
 	observedClaimDurations.Delete(namespace + "/" + name)
 }
-

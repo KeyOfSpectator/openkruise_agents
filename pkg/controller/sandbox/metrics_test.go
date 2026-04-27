@@ -876,13 +876,13 @@ func TestRecordSandboxMetrics_InfoNoOwner(t *testing.T) {
 
 func TestRecordSandboxMetrics_InfoPartialFields(t *testing.T) {
 	tests := []struct {
-		name            string
-		nodeName        string
-		podUID          types.UID
-		templateLabel   string
-		wantNode        string
-		wantPodUID      string
-		wantTemplate    string
+		name          string
+		nodeName      string
+		podUID        types.UID
+		templateLabel string
+		wantNode      string
+		wantPodUID    string
+		wantTemplate  string
 	}{
 		{
 			name:         "node set, no pod UID, no template label",

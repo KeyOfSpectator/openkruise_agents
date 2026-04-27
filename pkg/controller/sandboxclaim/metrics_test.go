@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -66,41 +66,41 @@ func TestRecordSandboxClaimMetrics_ClaimingPhase(t *testing.T) {
 	// Verify info metric
 	infoVal := testutil.ToFloat64(sandboxClaimInfo.WithLabelValues("default", "test-claim", "my-sandboxset", "claim-uid-001"))
 	if infoVal != 1 {
-		t.Errorf("sandboxclaim_info = %v, want 1", infoVal)
+		t.Errorf("sandbox_claim_info = %v, want 1", infoVal)
 	}
 
 	// Verify created timestamp
 	createdVal := testutil.ToFloat64(sandboxClaimCreated.WithLabelValues("default", "test-claim"))
 	if createdVal != float64(now.Unix()) {
-		t.Errorf("sandboxclaim_created = %v, want %v", createdVal, float64(now.Unix()))
+		t.Errorf("sandbox_claim_created = %v, want %v", createdVal, float64(now.Unix()))
 	}
 
 	// Verify phase: Claiming=1, Completed=0
 	claimingVal := testutil.ToFloat64(sandboxClaimStatusPhase.WithLabelValues("default", "test-claim", "Claiming"))
 	if claimingVal != 1 {
-		t.Errorf("sandboxclaim_status_phase{phase=Claiming} = %v, want 1", claimingVal)
+		t.Errorf("sandbox_claim_status_phase{phase=Claiming} = %v, want 1", claimingVal)
 	}
 	completedVal := testutil.ToFloat64(sandboxClaimStatusPhase.WithLabelValues("default", "test-claim", "Completed"))
 	if completedVal != 0 {
-		t.Errorf("sandboxclaim_status_phase{phase=Completed} = %v, want 0", completedVal)
+		t.Errorf("sandbox_claim_status_phase{phase=Completed} = %v, want 0", completedVal)
 	}
 
 	// Verify claim start time
 	startVal := testutil.ToFloat64(sandboxClaimClaimStartTime.WithLabelValues("default", "test-claim"))
 	if startVal != float64(startTime.Unix()) {
-		t.Errorf("sandboxclaim_claim_start_time = %v, want %v", startVal, float64(startTime.Unix()))
+		t.Errorf("sandbox_claim_start_time = %v, want %v", startVal, float64(startTime.Unix()))
 	}
 
 	// Verify claimed replicas
 	claimedVal := testutil.ToFloat64(sandboxClaimClaimedReplicas.WithLabelValues("default", "test-claim"))
 	if claimedVal != 1 {
-		t.Errorf("sandboxclaim_claimed_replicas = %v, want 1", claimedVal)
+		t.Errorf("sandbox_claim_claimed_replicas = %v, want 1", claimedVal)
 	}
 
 	// Verify desired replicas
 	desiredVal := testutil.ToFloat64(sandboxClaimDesiredReplicas.WithLabelValues("default", "test-claim"))
 	if desiredVal != 3 {
-		t.Errorf("sandboxclaim_desired_replicas = %v, want 3", desiredVal)
+		t.Errorf("sandbox_claim_desired_replicas = %v, want 3", desiredVal)
 	}
 }
 
@@ -133,17 +133,17 @@ func TestRecordSandboxClaimMetrics_CompletedPhase(t *testing.T) {
 	// Verify phase: Claiming=0, Completed=1
 	claimingVal := testutil.ToFloat64(sandboxClaimStatusPhase.WithLabelValues("default", "completed-claim", "Claiming"))
 	if claimingVal != 0 {
-		t.Errorf("sandboxclaim_status_phase{phase=Claiming} = %v, want 0", claimingVal)
+		t.Errorf("sandbox_claim_status_phase{phase=Claiming} = %v, want 0", claimingVal)
 	}
 	completedVal := testutil.ToFloat64(sandboxClaimStatusPhase.WithLabelValues("default", "completed-claim", "Completed"))
 	if completedVal != 1 {
-		t.Errorf("sandboxclaim_status_phase{phase=Completed} = %v, want 1", completedVal)
+		t.Errorf("sandbox_claim_status_phase{phase=Completed} = %v, want 1", completedVal)
 	}
 
 	// Verify completion time
 	compVal := testutil.ToFloat64(sandboxClaimCompletionTime.WithLabelValues("default", "completed-claim"))
 	if compVal != float64(completionTime.Unix()) {
-		t.Errorf("sandboxclaim_completion_time = %v, want %v", compVal, float64(completionTime.Unix()))
+		t.Errorf("sandbox_claim_completion_time = %v, want %v", compVal, float64(completionTime.Unix()))
 	}
 }
 
@@ -198,12 +198,12 @@ func TestDeleteSandboxClaimMetrics(t *testing.T) {
 	// Verify metrics are set
 	val := testutil.ToFloat64(sandboxClaimCreated.WithLabelValues(ns, name))
 	if val == 0 {
-		t.Fatal("sandboxclaim_created should be set before delete")
+		t.Fatal("sandbox_claim_created should be set before delete")
 	}
 
 	infoVal := testutil.ToFloat64(sandboxClaimInfo.WithLabelValues(ns, name, "my-sandboxset", "claim-uid-004"))
 	if infoVal != 1 {
-		t.Errorf("sandboxclaim_info before delete = %v, want 1", infoVal)
+		t.Errorf("sandbox_claim_info before delete = %v, want 1", infoVal)
 	}
 
 	// Delete metrics
@@ -212,39 +212,39 @@ func TestDeleteSandboxClaimMetrics(t *testing.T) {
 	// After deletion, WithLabelValues creates a new zero-value gauge.
 	val = testutil.ToFloat64(sandboxClaimCreated.WithLabelValues(ns, name))
 	if val != 0 {
-		t.Errorf("sandboxclaim_created after delete = %v, want 0", val)
+		t.Errorf("sandbox_claim_created after delete = %v, want 0", val)
 	}
 
 	// Verify phase metrics are cleaned
 	for _, phase := range allClaimPhases {
 		v := testutil.ToFloat64(sandboxClaimStatusPhase.WithLabelValues(ns, name, string(phase)))
 		if v != 0 {
-			t.Errorf("sandboxclaim_status_phase{phase=%s} after delete = %v, want 0", phase, v)
+			t.Errorf("sandbox_claim_status_phase{phase=%s} after delete = %v, want 0", phase, v)
 		}
 	}
 
 	// Verify claim start time is cleaned
 	startVal := testutil.ToFloat64(sandboxClaimClaimStartTime.WithLabelValues(ns, name))
 	if startVal != 0 {
-		t.Errorf("sandboxclaim_claim_start_time after delete = %v, want 0", startVal)
+		t.Errorf("sandbox_claim_start_time after delete = %v, want 0", startVal)
 	}
 
 	// Verify completion time is cleaned
 	compVal := testutil.ToFloat64(sandboxClaimCompletionTime.WithLabelValues(ns, name))
 	if compVal != 0 {
-		t.Errorf("sandboxclaim_completion_time after delete = %v, want 0", compVal)
+		t.Errorf("sandbox_claim_completion_time after delete = %v, want 0", compVal)
 	}
 
 	// Verify claimed replicas is cleaned
 	claimedVal := testutil.ToFloat64(sandboxClaimClaimedReplicas.WithLabelValues(ns, name))
 	if claimedVal != 0 {
-		t.Errorf("sandboxclaim_claimed_replicas after delete = %v, want 0", claimedVal)
+		t.Errorf("sandbox_claim_claimed_replicas after delete = %v, want 0", claimedVal)
 	}
 
 	// Verify desired replicas is cleaned
 	desiredVal := testutil.ToFloat64(sandboxClaimDesiredReplicas.WithLabelValues(ns, name))
 	if desiredVal != 0 {
-		t.Errorf("sandboxclaim_desired_replicas after delete = %v, want 0", desiredVal)
+		t.Errorf("sandbox_claim_desired_replicas after delete = %v, want 0", desiredVal)
 	}
 }
 
