@@ -22,23 +22,23 @@ import (
 )
 
 var (
-	// routesTotal tracks the current number of routes in the proxy routing table.
-	routesTotal = prometheus.NewGauge(
+	// routeCount tracks the current number of routes in the proxy routing table.
+	routeCount = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "sandbox_routes_total",
+			Name: "sandbox_routes",
 			Help: "Current number of routes in the proxy routing table",
 		},
 	)
 
-	// peersTotal tracks the current number of connected peer nodes.
-	peersTotal = prometheus.NewGauge(
+	// peerCount tracks the current number of connected peer nodes.
+	peerCount = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "sandbox_peers_total",
+			Name: "sandbox_peers",
 			Help: "Current number of connected peer nodes",
 		},
 	)
 )
 
 func init() {
-	metrics.Registry.MustRegister(routesTotal, peersTotal)
+	metrics.Registry.MustRegister(routeCount, peerCount)
 }

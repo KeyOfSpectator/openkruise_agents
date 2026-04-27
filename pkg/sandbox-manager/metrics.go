@@ -104,7 +104,7 @@ var (
 			Name:        "sandbox_claim_retries",
 			Help:        "Number of retries per claim operation",
 			ConstLabels: prometheus.Labels{"source": "e2b"},
-			Buckets:     prometheus.ExponentialBuckets(0.02, 2, 12), // 20ms -> ~41s
+			Buckets:     prometheus.LinearBuckets(0, 1, 11), // 0 to 10 bigger step for retries
 		},
 	)
 

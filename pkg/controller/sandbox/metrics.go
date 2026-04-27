@@ -126,7 +126,7 @@ var (
 			Name:        "sandbox_creation_duration_seconds",
 			Help:        "Duration from sandbox creation to Ready condition in seconds",
 			ConstLabels: prometheus.Labels{"source": "k8s"},
-			Buckets:     prometheus.ExponentialBuckets(0.02, 2, 12), // 20ms -> ~41ss
+			Buckets:     prometheus.ExponentialBuckets(0.02, 2, 12), // 20ms -> ~41s
 		},
 	)
 
