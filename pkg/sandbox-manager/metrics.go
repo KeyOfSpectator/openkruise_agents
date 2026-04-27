@@ -56,10 +56,10 @@ var (
 		[]string{"result"},
 	)
 
-	// SandboxClaimDeleteDuration tracks the time of sandbox delete operations
+	// SandboxDeleteDuration tracks the time of sandbox delete operations
 	SandboxDeleteDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:        "sandbox_claim_delete_duration_seconds",
+			Name:        "sandbox_delete_duration_seconds",
 			Help:        "Duration of sandbox delete operations in seconds",
 			ConstLabels: prometheus.Labels{"source": "e2b"},
 			Buckets:     prometheus.ExponentialBuckets(0.02, 2, 12), // 20ms -> ~41s
