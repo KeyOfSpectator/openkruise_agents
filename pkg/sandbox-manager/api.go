@@ -19,7 +19,7 @@ func (m *SandboxManager) ClaimSandbox(ctx context.Context, opts infra.ClaimSandb
 	if !m.infra.HasTemplate(opts.Template) {
 		// Requirement: Track failure in API layer
 		sandboxClaimCreationResponses.WithLabelValues("failure").Inc()
-		SandboxClaimTotal.WithLabelValues("failure", "unknown").Inc()
+		sandboxClaimTotal.WithLabelValues("failure", "unknown").Inc()
 		return nil, errors.NewError(errors.ErrorNotFound, fmt.Sprintf("template %s not found", opts.Template))
 	}
 	sandbox, claimMetrics, err := m.infra.ClaimSandbox(ctx, opts)
@@ -27,7 +27,7 @@ func (m *SandboxManager) ClaimSandbox(ctx context.Context, opts infra.ClaimSandb
 		log.Error(err, "failed to claim sandbox", "metrics", claimMetrics.String())
 		// Requirement: Track failure in API layer
 		sandboxClaimCreationResponses.WithLabelValues("failure").Inc()
-		SandboxClaimTotal.WithLabelValues("failure", "unknown").Inc()
+		sandboxClaimTotal.WithLabelValues("failure", "unknown").Inc()
 		return nil, errors.NewError(errors.ErrorInternal, fmt.Sprintf("failed to claim sandbox: %v", err))
 	}
 
@@ -37,9 +37,9 @@ func (m *SandboxManager) ClaimSandbox(ctx context.Context, opts infra.ClaimSandb
 	sandboxClaimCreationDuration.Observe(claimMetrics.Total.Seconds())
 
 	// Claim-specific metrics
-	SandboxClaimDuration.Observe(claimMetrics.Total.Seconds())
-	SandboxClaimTotal.WithLabelValues("success", string(claimMetrics.LockType)).Inc()
-	SandboxClaimRetries.Observe(float64(claimMetrics.Retries))
+	sandboxClaimDuration.Observe(claimMetrics.Total.Seconds())
+	sandboxClaimTotal.WithLabelValues("success", string(claimMetrics.LockType)).Inc()
+	sandboxClaimRetries.Observe(float64(claimMetrics.Retries))
 
 	state, reason := sandbox.GetState()
 	log.Info("sandbox claimed", "sandbox", klog.KObj(sandbox), "metrics", claimMetrics.String(), "state", state, "reason", reason)
@@ -56,13 +56,13 @@ func (m *SandboxManager) CloneSandbox(ctx context.Context, opts infra.CloneSandb
 	sandbox, cloneMetrics, err := m.infra.CloneSandbox(ctx, opts)
 	if err != nil {
 		log.Error(err, "failed to clone sandbox", "metrics", cloneMetrics)
-		SandboxCloneTotal.WithLabelValues("failure").Inc()
+		sandboxCloneTotal.WithLabelValues("failure").Inc()
 		return nil, errors.NewError(errors.ErrorInternal, fmt.Sprintf("failed to clone sandbox: %v", err))
 	}
 
 	// Clone-specific metrics
-	SandboxCloneDuration.Observe(cloneMetrics.Total.Seconds())
-	SandboxCloneTotal.WithLabelValues("success").Inc()
+	sandboxCloneDuration.Observe(cloneMetrics.Total.Seconds())
+	sandboxCloneTotal.WithLabelValues("success").Inc()
 
 	state, reason := sandbox.GetState()
 	log.Info("sandbox cloned", "sandbox", klog.KObj(sandbox), "metrics", cloneMetrics.String(), "state", state, "reason", reason)
