@@ -333,7 +333,7 @@ func (r *Reconciler) createSandbox(ctx context.Context, sbs *agentsv1alpha1.Sand
 			Namespace: sbs.Namespace,
 			Name:      sbs.Spec.TemplateRef.Name,
 		}, refTemplate); err != nil {
-			r.Recorder.Eventf(sbs, corev1.EventTypeWarning, EventCreateSandboxFailed, "Failed to resolve sandbox template: %s", err)
+			r.Recorder.Eventf(sbs, corev1.EventTypeWarning, events.CreateSandboxFailed, "Failed to resolve sandbox template: %s", err)
 			return nil, fmt.Errorf("failed to resolve sandbox template %s/%s: %w",
 				sbs.Namespace, sbs.Spec.TemplateRef.Name, err)
 		}
