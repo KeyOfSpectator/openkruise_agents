@@ -735,8 +735,9 @@ func TestSandboxReconciler_Reconcile(t *testing.T) {
 			client := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&agentsv1alpha1.Sandbox{}).WithObjects(objects...).Build()
 			rl := core.NewRateLimiter()
 			reconciler := &SandboxReconciler{
-				Client: client,
-				Scheme: scheme,
+				Client:   client,
+				Scheme:   scheme,
+				recorder: fakeRecorder,
 				controls: core.NewSandboxControl(core.SandboxControlArgs{
 					Client:      client,
 					Recorder:    fakeRecorder,
