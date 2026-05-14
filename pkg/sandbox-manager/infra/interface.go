@@ -26,6 +26,7 @@ import (
 
 	"github.com/openkruise/agents/pkg/cache"
 	"github.com/openkruise/agents/pkg/proxy"
+	"github.com/openkruise/agents/pkg/utils/timeout"
 )
 
 type SandboxResource struct {
@@ -34,15 +35,16 @@ type SandboxResource struct {
 	DiskSizeMB int64
 }
 
-// TimeoutOptions is the time when Sandbox will be shut down or paused. Zero means never.
-type TimeoutOptions struct {
-	ShutdownTime time.Time
-	PauseTime    time.Time
+type TimeoutUpdateResult struct {
+	Updated bool
 }
 
 type PauseOptions struct {
-	Timeout *TimeoutOptions
+	Timeout *timeout.Options
 }
+
+// ResumeOptions reserves the type for future extensions.
+type ResumeOptions struct{}
 
 type HasTemplateOptions struct {
 	Namespace string
@@ -97,9 +99,9 @@ type Infrastructure interface {
 }
 
 type Sandbox interface {
-	metav1.Object                                       // For K8s object metadata access
-	Pause(ctx context.Context, opts PauseOptions) error // Pause a Sandbox
-	Resume(ctx context.Context) error                   // Resume a paused Sandbox
+	metav1.Object                                         // For K8s object metadata access
+	Pause(ctx context.Context, opts PauseOptions) error   // Pause a Sandbox
+	Resume(ctx context.Context, opts ResumeOptions) error // Resume a paused Sandbox
 	GetSandboxID() string
 	GetRoute() proxy.Route
 	GetState() (string, string)   // Get Sandbox State (pending, running, paused, killing, etc.)
@@ -109,9 +111,9 @@ type Sandbox interface {
 	GetImage() string
 	SetPodLabels(labels map[string]string)
 	GetPodLabels() map[string]string
-	SetTimeout(opts TimeoutOptions)
-	SaveTimeout(ctx context.Context, opts TimeoutOptions) error
-	GetTimeout() TimeoutOptions
+	SetTimeout(opts timeout.Options)
+	SaveTimeoutWithPolicy(ctx context.Context, opts timeout.Options, policy timeout.UpdatePolicy) (TimeoutUpdateResult, error)
+	GetTimeout() timeout.Options
 	GetClaimTime() (time.Time, error)
 	Kill(ctx context.Context) error                                                                     // Delete the Sandbox resource
 	InplaceRefresh(ctx context.Context, deepcopy bool) error                                            // Update the Sandbox resource object to the latest

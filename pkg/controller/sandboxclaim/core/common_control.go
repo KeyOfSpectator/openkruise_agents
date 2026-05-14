@@ -43,6 +43,7 @@ import (
 	"github.com/openkruise/agents/pkg/utils/csiutils"
 	utilfeature "github.com/openkruise/agents/pkg/utils/feature"
 	stateutils "github.com/openkruise/agents/pkg/utils/sandboxutils"
+	"github.com/openkruise/agents/pkg/utils/timeout"
 )
 
 type commonControl struct {
@@ -297,7 +298,7 @@ func (c *commonControl) buildClaimOptions(ctx context.Context, claim *agentsv1al
 
 			// apply shutdownTime
 			if claim.Spec.ShutdownTime != nil {
-				sbx.SetTimeout(infra.TimeoutOptions{
+				sbx.SetTimeout(timeout.Options{
 					ShutdownTime: claim.Spec.ShutdownTime.Time,
 				})
 			}

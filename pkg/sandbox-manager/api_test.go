@@ -42,6 +42,7 @@ import (
 	"github.com/openkruise/agents/pkg/sandbox-manager/infra/sandboxcr"
 	utils "github.com/openkruise/agents/pkg/utils/sandbox-manager"
 	"github.com/openkruise/agents/pkg/utils/sandboxutils"
+	"github.com/openkruise/agents/pkg/utils/timeout"
 )
 
 var testUser = "test-user"
@@ -157,7 +158,7 @@ func TestSandboxManager_ClaimSandbox(t *testing.T) {
 				User:     username,
 				Template: "exist-1",
 				Modifier: func(sandbox infra.Sandbox) {
-					sandbox.SetTimeout(infra.TimeoutOptions{
+					sandbox.SetTimeout(timeout.Options{
 						ShutdownTime: now.Add(time.Second),
 						PauseTime:    now.Add(time.Second),
 					})
@@ -167,9 +168,9 @@ func TestSandboxManager_ClaimSandbox(t *testing.T) {
 				"exist-1": 1,
 			},
 			postCheck: func(t *testing.T, sbx infra.Sandbox) {
-				timeout := sbx.GetTimeout()
-				assert.WithinDuration(t, now.Add(time.Second), timeout.ShutdownTime, 2*time.Second)
-				assert.WithinDuration(t, now.Add(time.Second), timeout.PauseTime, 2*time.Second)
+				opts := sbx.GetTimeout()
+				assert.WithinDuration(t, now.Add(time.Second), opts.ShutdownTime, 2*time.Second)
+				assert.WithinDuration(t, now.Add(time.Second), opts.PauseTime, 2*time.Second)
 			},
 		},
 		{
@@ -581,7 +582,7 @@ func TestSandboxManager_PauseSandbox(t *testing.T) {
 			expectedIP:    "10.0.0.1",
 		},
 		{
-			name: "pause already paused sandbox should fail",
+			name: "pause already paused sandbox should success",
 			initSandbox: func(sbx *agentsv1alpha1.Sandbox) {
 				sbx.Status.Phase = agentsv1alpha1.SandboxPaused
 				sbx.Status.Conditions = []metav1.Condition{
@@ -593,9 +594,9 @@ func TestSandboxManager_PauseSandbox(t *testing.T) {
 				sbx.Spec.Paused = true
 				sbx.Status.PodInfo.PodIP = "10.0.0.2"
 			},
-			expectError:   true,
-			expectedState: "",
-			expectedIP:    "",
+			expectError:   false,
+			expectedState: agentsv1alpha1.SandboxStatePaused,
+			expectedIP:    "10.0.0.2",
 		},
 	}
 
@@ -711,7 +712,7 @@ func TestSandboxManager_ResumeSandbox(t *testing.T) {
 			ipChanged:     true,
 		},
 		{
-			name: "resume already running sandbox should fail",
+			name: "resume already running sandbox should success",
 			initSandbox: func(sbx *agentsv1alpha1.Sandbox) {
 				sbx.Status.Phase = agentsv1alpha1.SandboxRunning
 				sbx.Status.Conditions = []metav1.Condition{
@@ -723,9 +724,9 @@ func TestSandboxManager_ResumeSandbox(t *testing.T) {
 				sbx.Spec.Paused = false
 				sbx.Status.PodInfo.PodIP = "10.0.0.1"
 			},
-			expectError:   true,
-			expectedState: "",
-			expectedIP:    "",
+			expectError:   false,
+			expectedState: agentsv1alpha1.SandboxStateRunning,
+			expectedIP:    "10.0.0.1",
 			ipChanged:     false,
 		},
 	}
@@ -776,7 +777,7 @@ func TestSandboxManager_ResumeSandbox(t *testing.T) {
 				})
 			}
 
-			err = manager.ResumeSandbox(t.Context(), sbx)
+			err = manager.ResumeSandbox(t.Context(), sbx, infra.ResumeOptions{})
 
 			if tt.expectError {
 				assert.Error(t, err)

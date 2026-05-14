@@ -232,7 +232,7 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (cr
 	case agentsv1alpha1.SandboxRunning:
 		err = r.getControl(args.Pod).EnsureSandboxUpdated(ctx, args)
 	case agentsv1alpha1.SandboxPaused:
-		err = r.getControl(args.Pod).EnsureSandboxPaused(ctx, args)
+		err = r.EnsureSandboxPaused(ctx, args)
 	case agentsv1alpha1.SandboxResuming:
 		err = r.getControl(args.Pod).EnsureSandboxResumed(ctx, args)
 	case agentsv1alpha1.SandboxUpgrading:
@@ -248,6 +248,10 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (cr
 		return reconcile.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: requeueAfter}, r.updateSandboxStatus(ctx, *newStatus, box)
+}
+
+func (r *SandboxReconciler) EnsureSandboxPaused(ctx context.Context, args core.EnsureFuncArgs) error {
+	return r.getControl(args.Pod).EnsureSandboxPaused(ctx, args)
 }
 
 func (r *SandboxReconciler) handleTerminating(ctx context.Context, args core.EnsureFuncArgs) (ctrl.Result, error) {
@@ -342,6 +346,7 @@ func calculateStatus(args core.EnsureFuncArgs) (*agentsv1alpha1.SandboxStatus, b
 				"podRevision", pod.Labels[agentsv1alpha1.PodLabelTemplateHash],
 				"sandboxRevision", newStatus.UpdateRevision)
 			newStatus.Phase = agentsv1alpha1.SandboxUpgrading
+			utils.RemoveSandboxCondition(newStatus, string(agentsv1alpha1.SandboxConditionUpgrading))
 		}
 
 	case agentsv1alpha1.SandboxPaused:

@@ -18,7 +18,6 @@ package sandbox_manager
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -97,24 +96,24 @@ func (m *SandboxManager) GetClaimedSandbox(ctx context.Context, user string, opt
 	sbx, err := m.infra.GetClaimedSandbox(ctx, opts)
 	if err != nil {
 		log.Error(err, "failed to get sandbox from cache")
-		return nil, errors.NewError(errors.ErrorNotFound, fmt.Sprintf("sandbox %s not found", opts.SandboxID))
+		return nil, errors.NewError(errors.ErrorNotFound, "sandbox %s not found", opts.SandboxID)
 	}
 
 	state, reason := sbx.GetState()
 	if state == v1alpha1.SandboxStateAvailable || state == v1alpha1.SandboxStateCreating {
 		// not claimed sandbox should return not found
 		log.Error(nil, "sandbox is not claimed", "state", state, "reason", reason)
-		return nil, errors.NewError(errors.ErrorNotFound, fmt.Sprintf("sandbox %s not found", opts.SandboxID))
+		return nil, errors.NewError(errors.ErrorNotFound, "sandbox %s not found", opts.SandboxID)
 	}
 
 	if sbx.GetRoute().Owner != user {
 		log.Error(nil, "sandbox is not owned by user")
-		return nil, errors.NewError(errors.ErrorNotAllowed, fmt.Sprintf("sandbox %s is not owned", opts.SandboxID))
+		return nil, errors.NewError(errors.ErrorNotAllowed, "sandbox %s is not owned", opts.SandboxID)
 	}
 
 	if state != v1alpha1.SandboxStatePaused && state != v1alpha1.SandboxStateRunning {
 		log.Error(nil, "sandbox is not healthy", "state", state, "reason", reason)
-		return nil, errors.NewError(errors.ErrorBadRequest, fmt.Sprintf("sandbox %s is not healthy (state %s, reason %s)", opts.SandboxID, state, reason))
+		return nil, errors.NewError(errors.ErrorBadRequest, "sandbox %s is not healthy (state %s, reason %s)", opts.SandboxID, state, reason)
 	}
 	return sbx, nil
 }
@@ -122,7 +121,7 @@ func (m *SandboxManager) GetClaimedSandbox(ctx context.Context, user string, opt
 func (m *SandboxManager) ListSandboxes(ctx context.Context, opts infra.SelectSandboxesOptions, p *utils.Paginator[infra.Sandbox]) ([]infra.Sandbox, string, error) {
 	sandboxes, err := m.infra.SelectSandboxes(ctx, opts)
 	if err != nil {
-		return nil, "", errors.NewError(errors.ErrorNotFound, fmt.Sprintf("failed to list sandboxes: %v", err))
+		return nil, "", errors.NewError(errors.ErrorNotFound, "failed to list sandboxes: %v", err)
 	}
 	var nextToken string
 	if p != nil {
@@ -134,7 +133,7 @@ func (m *SandboxManager) ListSandboxes(ctx context.Context, opts infra.SelectSan
 func (m *SandboxManager) ListCheckpoints(ctx context.Context, opts infra.SelectSucceededCheckpointsOptions, p *utils.Paginator[infra.CheckpointInfo]) ([]infra.CheckpointInfo, string, error) {
 	checkpoints, err := m.infra.SelectSucceededCheckpoints(ctx, opts)
 	if err != nil {
-		return nil, "", errors.NewError(errors.ErrorNotFound, fmt.Sprintf("failed to list checkpoints: %v", err))
+		return nil, "", errors.NewError(errors.ErrorNotFound, "failed to list checkpoints: %v", err)
 	}
 	var nextToken string
 	if p != nil {
@@ -205,10 +204,10 @@ func (m *SandboxManager) PauseSandbox(ctx context.Context, sbx infra.Sandbox, op
 }
 
 // ResumeSandbox resumes a sandbox and syncs route with peers
-func (m *SandboxManager) ResumeSandbox(ctx context.Context, sbx infra.Sandbox) error {
+func (m *SandboxManager) ResumeSandbox(ctx context.Context, sbx infra.Sandbox, opts infra.ResumeOptions) error {
 	log := klog.FromContext(ctx).WithValues("sandbox", klog.KObj(sbx))
 	start := time.Now()
-	if err := sbx.Resume(ctx); err != nil {
+	if err := sbx.Resume(ctx, opts); err != nil {
 		log.Error(err, "failed to resume sandbox")
 		sandboxResumeResponses.WithLabelValues(sbx.GetNamespace(), "failure").Inc()
 		return err

@@ -1702,6 +1702,62 @@ func TestCalculateStatus(t *testing.T) {
 			expectedShouldReq: true,
 		},
 		{
+			name: "running phase with hash mismatch and recreate policy should transition to upgrading and remove upgrading condition",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-sandbox",
+					Namespace: "default",
+					Labels: map[string]string{
+						agentsv1alpha1.PodLabelTemplateHash: "old-hash",
+					},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+				},
+			},
+			box: &agentsv1alpha1.Sandbox{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-sandbox",
+					Namespace:  "default",
+					Generation: 1,
+				},
+				Spec: agentsv1alpha1.SandboxSpec{
+					Paused: false,
+					UpgradePolicy: &agentsv1alpha1.SandboxUpgradePolicy{
+						Type: agentsv1alpha1.SandboxUpgradePolicyRecreate,
+					},
+					EmbeddedSandboxTemplate: agentsv1alpha1.EmbeddedSandboxTemplate{
+						Template: &corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "test", Image: "nginx:v2"}},
+							},
+						},
+					},
+				},
+			},
+			initStatus: &agentsv1alpha1.SandboxStatus{
+				Phase: agentsv1alpha1.SandboxRunning,
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(agentsv1alpha1.SandboxConditionUpgrading),
+						Status:             metav1.ConditionTrue,
+						Reason:             "PreviousUpgrade",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+			expectedPhase:     agentsv1alpha1.SandboxUpgrading,
+			expectedShouldReq: false,
+			checkConditions: func(t *testing.T, status *agentsv1alpha1.SandboxStatus) {
+				// Upgrading condition should be removed when entering upgrading phase
+				for _, cond := range status.Conditions {
+					if cond.Type == string(agentsv1alpha1.SandboxConditionUpgrading) {
+						t.Errorf("Upgrading condition should be removed, but still exists")
+					}
+				}
+			},
+		},
+		{
 			name: "pending phase with pod succeed should set to succeed",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -3613,5 +3669,70 @@ func TestUpdateSandboxStatus_Upgrading_RevisionUnchanged_NoReset(t *testing.T) {
 	}
 	if upgradeCond.Message != "upgrading pod" {
 		t.Errorf("Expected Message %q, got %q", "upgrading pod", upgradeCond.Message)
+	}
+}
+
+func TestEnsureSandboxPaused_DelegatesToControl(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = agentsv1alpha1.AddToScheme(scheme)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "delegate-sandbox",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "test", Image: "nginx"}},
+		},
+	}
+
+	sandbox := &agentsv1alpha1.Sandbox{
+		ObjectMeta: metav1.ObjectMeta{Name: "delegate-sandbox", Namespace: "default", Annotations: map[string]string{}},
+		Spec: agentsv1alpha1.SandboxSpec{
+			Paused:       true,
+			ShutdownTime: &metav1.Time{Time: time.Now().Add(1 * time.Hour).Truncate(time.Second)},
+		},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(sandbox, pod).
+		Build()
+
+	recorder := record.NewFakeRecorder(10)
+	rl := core.NewRateLimiter()
+	r := &SandboxReconciler{
+		Client: fc,
+		Scheme: scheme,
+		controls: core.NewSandboxControl(core.SandboxControlArgs{
+			Client:      fc,
+			Recorder:    recorder,
+			RateLimiter: rl,
+		}),
+		rateLimiter: rl,
+	}
+
+	newStatus := &agentsv1alpha1.SandboxStatus{Phase: agentsv1alpha1.SandboxPaused}
+	args := core.EnsureFuncArgs{
+		Pod:       pod,
+		Box:       sandbox,
+		NewStatus: newStatus,
+	}
+
+	err := r.EnsureSandboxPaused(context.Background(), args)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify the control side effect: pod should be deleted
+	fetchedPod := &corev1.Pod{}
+	getErr := fc.Get(context.Background(), client.ObjectKeyFromObject(pod), fetchedPod)
+	if getErr == nil && fetchedPod.DeletionTimestamp.IsZero() {
+		t.Error("expected pod to be deleted by control, but it still exists without deletion timestamp")
+	}
+	// Acceptable outcomes: pod is deleted (not found) or pod has deletion timestamp set
+	if getErr != nil && !apierrors.IsNotFound(getErr) {
+		t.Errorf("unexpected error fetching pod: %v", getErr)
 	}
 }
