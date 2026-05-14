@@ -275,10 +275,14 @@ func TestRecordSandboxMetrics_InplaceUpdateConditionFalse(t *testing.T) {
 	recordSandboxMetrics(sandbox)
 	defer deleteSandboxMetrics("default", "inplace-sandbox")
 
-	// InplaceUpdate=False: inplace_update_done should be 0
-	val := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues("default", "inplace-sandbox"))
-	if val != 0 {
-		t.Errorf("sandbox_status_inplace_update_done = %v, want 0", val)
+	// InplaceUpdate=False: inplace_updating should be 1 (negative semantics)
+	val := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues("default", "inplace-sandbox"))
+	if val != 1 {
+		t.Errorf("sandbox_status_inplace_updating = %v, want 1", val)
+	}
+	valTime := testutil.ToFloat64(sandboxStatusInplaceUpdatingTime.WithLabelValues("default", "inplace-sandbox"))
+	if valTime == 0 {
+		t.Errorf("sandbox_status_inplace_updating_time should be set when condition is False")
 	}
 }
 
@@ -305,14 +309,10 @@ func TestRecordSandboxMetrics_InplaceUpdateConditionTrue(t *testing.T) {
 	recordSandboxMetrics(sandbox)
 	defer deleteSandboxMetrics("default", "inplace-true-sandbox")
 
-	// Verify inplace_update_done metrics
-	doneVal := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues("default", "inplace-true-sandbox"))
-	if doneVal != 1 {
-		t.Errorf("sandbox_status_inplace_update_done = %v, want 1", doneVal)
-	}
-	doneTime := testutil.ToFloat64(sandboxStatusInplaceUpdateDoneTime.WithLabelValues("default", "inplace-true-sandbox"))
-	if doneTime != float64(now.Unix()) {
-		t.Errorf("sandbox_status_inplace_update_done_time = %v, want %v", doneTime, float64(now.Unix()))
+	// Verify inplace_updating metrics (True → updating=0)
+	doneVal := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues("default", "inplace-true-sandbox"))
+	if doneVal != 0 {
+		t.Errorf("sandbox_status_inplace_updating = %v, want 0", doneVal)
 	}
 }
 
@@ -364,10 +364,10 @@ func TestRecordSandboxMetrics_PausedConditionTrue(t *testing.T) {
 	recordSandboxMetrics(sandbox)
 	defer deleteSandboxMetrics("default", "paused-true-sandbox")
 
-	// Verify paused_time timestamp is recorded
-	pausedTime := testutil.ToFloat64(sandboxStatusPausedTime.WithLabelValues("default", "paused-true-sandbox"))
-	if pausedTime != float64(now.Unix()) {
-		t.Errorf("sandbox_status_paused_time = %v, want %v", pausedTime, float64(now.Unix()))
+	// Paused=True → unpaused=0, unpaused_time should NOT be set
+	unpausedVal := testutil.ToFloat64(sandboxStatusUnpaused.WithLabelValues("default", "paused-true-sandbox"))
+	if unpausedVal != 0 {
+		t.Errorf("sandbox_status_unpaused = %v, want 0", unpausedVal)
 	}
 }
 
@@ -419,10 +419,10 @@ func TestRecordSandboxMetrics_ResumedConditionTrue(t *testing.T) {
 	recordSandboxMetrics(sandbox)
 	defer deleteSandboxMetrics("default", "resumed-true-sandbox")
 
-	// Verify resumed_time timestamp is recorded
-	resumedTime := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues("default", "resumed-true-sandbox"))
-	if resumedTime != float64(now.Unix()) {
-		t.Errorf("sandbox_status_resumed_time = %v, want %v", resumedTime, float64(now.Unix()))
+	// Resumed=True → unresumed=0, unresumed_time should NOT be set
+	unresumedVal := testutil.ToFloat64(sandboxStatusUnresumed.WithLabelValues("default", "resumed-true-sandbox"))
+	if unresumedVal != 0 {
+		t.Errorf("sandbox_status_unresumed = %v, want 0", unresumedVal)
 	}
 }
 
@@ -459,10 +459,10 @@ func TestRecordSandboxMetrics_MultipleConditions(t *testing.T) {
 		t.Errorf("sandbox_status_ready = %v, want 1", readyVal)
 	}
 
-	// InplaceUpdate=False: inplace_update_done should be 0
-	inplaceVal := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues("default", "multi-cond-sandbox"))
-	if inplaceVal != 0 {
-		t.Errorf("sandbox_status_inplace_update_done = %v, want 0", inplaceVal)
+	// InplaceUpdate=False: inplace_updating should be 1 (negative semantics)
+	inplaceVal := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues("default", "multi-cond-sandbox"))
+	if inplaceVal != 1 {
+		t.Errorf("sandbox_status_inplace_updating = %v, want 1", inplaceVal)
 	}
 }
 
@@ -584,8 +584,8 @@ func TestRecordSandboxMetrics_PausedConditionTrueTimestamp(t *testing.T) {
 		status       metav1.ConditionStatus
 		wantPausedTS bool
 	}{
-		{name: "Paused=True sets paused_time timestamp", status: metav1.ConditionTrue, wantPausedTS: true},
-		{name: "Paused=False does not set paused_time", status: metav1.ConditionFalse, wantPausedTS: false},
+		{name: "Paused=False sets unpaused_time timestamp", status: metav1.ConditionFalse, wantPausedTS: true},
+		{name: "Paused=True does not set unpaused_time", status: metav1.ConditionTrue, wantPausedTS: false},
 	}
 
 	for _, tt := range tests {
@@ -614,9 +614,9 @@ func TestRecordSandboxMetrics_PausedConditionTrueTimestamp(t *testing.T) {
 			defer deleteSandboxMetrics("default", sbName)
 
 			if tt.wantPausedTS {
-				ts := testutil.ToFloat64(sandboxStatusPausedTime.WithLabelValues("default", sbName))
+				ts := testutil.ToFloat64(sandboxStatusUnpausedTime.WithLabelValues("default", sbName))
 				if ts != float64(now.Unix()) {
-					t.Errorf("sandbox_status_paused_time = %v, want %v", ts, float64(now.Unix()))
+					t.Errorf("sandbox_status_unpaused_time = %v, want %v", ts, float64(now.Unix()))
 				}
 			}
 		})
@@ -629,8 +629,8 @@ func TestRecordSandboxMetrics_ResumedConditionTrueTimestamp(t *testing.T) {
 		status        metav1.ConditionStatus
 		wantResumedTS bool
 	}{
-		{name: "Resumed=True sets resumed_time timestamp", status: metav1.ConditionTrue, wantResumedTS: true},
-		{name: "Resumed=False does not set resumed_time", status: metav1.ConditionFalse, wantResumedTS: false},
+		{name: "Resumed=False sets unresumed_time timestamp", status: metav1.ConditionFalse, wantResumedTS: true},
+		{name: "Resumed=True does not set unresumed_time", status: metav1.ConditionTrue, wantResumedTS: false},
 	}
 
 	for _, tt := range tests {
@@ -659,9 +659,9 @@ func TestRecordSandboxMetrics_ResumedConditionTrueTimestamp(t *testing.T) {
 			defer deleteSandboxMetrics("default", sbName)
 
 			if tt.wantResumedTS {
-				ts := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues("default", sbName))
+				ts := testutil.ToFloat64(sandboxStatusUnresumedTime.WithLabelValues("default", sbName))
 				if ts != float64(now.Unix()) {
-					t.Errorf("sandbox_status_resumed_time = %v, want %v", ts, float64(now.Unix()))
+					t.Errorf("sandbox_status_unresumed_time = %v, want %v", ts, float64(now.Unix()))
 				}
 			}
 		})
@@ -675,8 +675,8 @@ func TestRecordSandboxMetrics_InplaceUpdateConditionTrueTimestamp(t *testing.T) 
 		wantDone   float64
 		wantDoneTS bool
 	}{
-		{name: "InplaceUpdate=True sets done=1 with timestamp", status: metav1.ConditionTrue, wantDone: 1, wantDoneTS: true},
-		{name: "InplaceUpdate=False sets done=0", status: metav1.ConditionFalse, wantDone: 0, wantDoneTS: false},
+		{name: "InplaceUpdate=False sets updating=1 with timestamp", status: metav1.ConditionFalse, wantDone: 1, wantDoneTS: true},
+		{name: "InplaceUpdate=True sets updating=0", status: metav1.ConditionTrue, wantDone: 0, wantDoneTS: false},
 	}
 
 	for _, tt := range tests {
@@ -704,14 +704,14 @@ func TestRecordSandboxMetrics_InplaceUpdateConditionTrueTimestamp(t *testing.T) 
 			recordSandboxMetrics(sandbox)
 			defer deleteSandboxMetrics("default", sbName)
 
-			val := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues("default", sbName))
+			val := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues("default", sbName))
 			if val != tt.wantDone {
-				t.Errorf("sandbox_status_inplace_update_done = %v, want %v", val, tt.wantDone)
+				t.Errorf("sandbox_status_inplace_updating = %v, want %v", val, tt.wantDone)
 			}
 			if tt.wantDoneTS {
-				ts := testutil.ToFloat64(sandboxStatusInplaceUpdateDoneTime.WithLabelValues("default", sbName))
+				ts := testutil.ToFloat64(sandboxStatusInplaceUpdatingTime.WithLabelValues("default", sbName))
 				if ts != float64(now.Unix()) {
-					t.Errorf("sandbox_status_inplace_update_done_time = %v, want %v", ts, float64(now.Unix()))
+					t.Errorf("sandbox_status_inplace_updating_time = %v, want %v", ts, float64(now.Unix()))
 				}
 			}
 		})
@@ -737,17 +737,17 @@ func TestDeleteSandboxMetrics_NewMetrics(t *testing.T) {
 				},
 				{
 					Type:               string(agentsv1alpha1.SandboxConditionPaused),
-					Status:             metav1.ConditionTrue,
+					Status:             metav1.ConditionFalse,
 					LastTransitionTime: now,
 				},
 				{
 					Type:               string(agentsv1alpha1.SandboxConditionResumed),
-					Status:             metav1.ConditionTrue,
+					Status:             metav1.ConditionFalse,
 					LastTransitionTime: now,
 				},
 				{
 					Type:               string(agentsv1alpha1.SandboxConditionInplaceUpdate),
-					Status:             metav1.ConditionTrue,
+					Status:             metav1.ConditionFalse,
 					LastTransitionTime: now,
 				},
 			},
@@ -760,14 +760,23 @@ func TestDeleteSandboxMetrics_NewMetrics(t *testing.T) {
 	if v := testutil.ToFloat64(sandboxStatusReady.WithLabelValues(ns, name)); v != 0 {
 		t.Errorf("sandbox_status_ready before delete = %v, want 0", v)
 	}
-	if v := testutil.ToFloat64(sandboxStatusPausedTime.WithLabelValues(ns, name)); v == 0 {
-		t.Errorf("sandbox_status_paused_time before delete should be set")
+	if v := testutil.ToFloat64(sandboxStatusUnpaused.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_unpaused before delete = %v, want 1", v)
 	}
-	if v := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues(ns, name)); v == 0 {
-		t.Errorf("sandbox_status_resumed_time before delete should be set")
+	if v := testutil.ToFloat64(sandboxStatusUnpausedTime.WithLabelValues(ns, name)); v == 0 {
+		t.Errorf("sandbox_status_unpaused_time before delete should be set")
 	}
-	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues(ns, name)); v != 1 {
-		t.Errorf("sandbox_status_inplace_update_done before delete = %v, want 1", v)
+	if v := testutil.ToFloat64(sandboxStatusUnresumed.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_unresumed before delete = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusUnresumedTime.WithLabelValues(ns, name)); v == 0 {
+		t.Errorf("sandbox_status_unresumed_time before delete should be set")
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_inplace_updating before delete = %v, want 1", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdatingTime.WithLabelValues(ns, name)); v == 0 {
+		t.Errorf("sandbox_status_inplace_updating_time before delete should be set")
 	}
 
 	// Delete and verify cleanup
@@ -776,17 +785,23 @@ func TestDeleteSandboxMetrics_NewMetrics(t *testing.T) {
 	if v := testutil.ToFloat64(sandboxStatusReady.WithLabelValues(ns, name)); v != 0 {
 		t.Errorf("sandbox_status_ready after delete = %v, want 0", v)
 	}
-	if v := testutil.ToFloat64(sandboxStatusPausedTime.WithLabelValues(ns, name)); v != 0 {
-		t.Errorf("sandbox_status_paused_time after delete = %v, want 0", v)
+	if v := testutil.ToFloat64(sandboxStatusUnpaused.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_unpaused after delete = %v, want 0", v)
 	}
-	if v := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues(ns, name)); v != 0 {
-		t.Errorf("sandbox_status_resumed_time after delete = %v, want 0", v)
+	if v := testutil.ToFloat64(sandboxStatusUnpausedTime.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_unpaused_time after delete = %v, want 0", v)
 	}
-	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues(ns, name)); v != 0 {
-		t.Errorf("sandbox_status_inplace_update_done after delete = %v, want 0", v)
+	if v := testutil.ToFloat64(sandboxStatusUnresumed.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_unresumed after delete = %v, want 0", v)
 	}
-	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDoneTime.WithLabelValues(ns, name)); v != 0 {
-		t.Errorf("sandbox_status_inplace_update_done_time after delete = %v, want 0", v)
+	if v := testutil.ToFloat64(sandboxStatusUnresumedTime.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_unresumed_time after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_inplace_updating after delete = %v, want 0", v)
+	}
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdatingTime.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_inplace_updating_time after delete = %v, want 0", v)
 	}
 }
 
@@ -837,14 +852,18 @@ func TestRecordSandboxMetrics_AllConditions(t *testing.T) {
 		t.Errorf("sandbox_status_ready_time = %v, want %v", v, float64(now.Unix()))
 	}
 
-	// Resumed=True: resumed_time should be set
-	if v := testutil.ToFloat64(sandboxStatusResumedTime.WithLabelValues(ns, name)); v != float64(now.Unix()) {
-		t.Errorf("sandbox_status_resumed_time = %v, want %v", v, float64(now.Unix()))
+	// Resumed=True: unresumed=0
+	if v := testutil.ToFloat64(sandboxStatusUnresumed.WithLabelValues(ns, name)); v != 0 {
+		t.Errorf("sandbox_status_unresumed = %v, want 0", v)
 	}
 
-	// InplaceUpdate=False: inplace_update_done=0
-	if v := testutil.ToFloat64(sandboxStatusInplaceUpdateDone.WithLabelValues(ns, name)); v != 0 {
-		t.Errorf("sandbox_status_inplace_update_done = %v, want 0", v)
+	// InplaceUpdate=False: inplace_updating=1 (negative semantics)
+	if v := testutil.ToFloat64(sandboxStatusInplaceUpdating.WithLabelValues(ns, name)); v != 1 {
+		t.Errorf("sandbox_status_inplace_updating = %v, want 1", v)
+	}
+	// unpaused_time should be set (Paused=False)
+	if v := testutil.ToFloat64(sandboxStatusUnpausedTime.WithLabelValues(ns, name)); v != float64(now.Unix()) {
+		t.Errorf("sandbox_status_unpaused_time = %v, want %v", v, float64(now.Unix()))
 	}
 }
 

@@ -78,23 +78,26 @@ var (
 		[]string{"namespace", "name"},
 	)
 
-	// sandboxSetSandboxesCreatedTotal tracks the cumulative number of Sandboxes successfully created by each SandboxSet
+	// sandboxSetSandboxesCreatedTotal tracks the cumulative number of Sandboxes successfully created by each SandboxSet.
+	// The sandboxset is labeled by namespace+name because the total number of SandboxSets
+	// is expected to be much smaller than Sandboxes/SandboxClaims, so the cardinality stays bounded.
 	sandboxSetSandboxesCreatedTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "sandboxset_sandboxes_created_total",
 			Help: "Cumulative number of Sandboxes successfully created by the SandboxSet",
 		},
-		[]string{"namespace"},
+		[]string{"namespace", "name"},
 	)
 
 	// sandboxSetSandboxesClaimedTotal tracks the cumulative number of Sandboxes claimed from each SandboxSet.
+	// Labeled by namespace+name of the SandboxSet for the same cardinality rationale as above.
 	sandboxSetSandboxesClaimedTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name:        "sandboxset_sandboxes_claimed_total",
 			Help:        "Cumulative number of Sandboxes claimed from the SandboxSet",
 			ConstLabels: prometheus.Labels{"source": "k8s"},
 		},
-		[]string{"namespace"},
+		[]string{"namespace", "name"},
 	)
 )
 
@@ -125,10 +128,11 @@ func deleteSandboxSetMetrics(namespace, name string) {
 	sandboxSetCreated.DeleteLabelValues(namespace, name)
 	sandboxSetUpdatedReplicas.DeleteLabelValues(namespace, name)
 	sandboxSetUpdatedAvailableReplicas.DeleteLabelValues(namespace, name)
-	// Counter metrics at namespace level are not deleted per-sandboxset
+	sandboxSetSandboxesCreatedTotal.DeleteLabelValues(namespace, name)
+	sandboxSetSandboxesClaimedTotal.DeleteLabelValues(namespace, name)
 }
 
-// IncSandboxesClaimedTotal increments the claimed sandboxes counter for the given namespace.
-func IncSandboxesClaimedTotal(namespace string, count int) {
-	sandboxSetSandboxesClaimedTotal.WithLabelValues(namespace).Add(float64(count))
+// IncSandboxesClaimedTotal increments the claimed sandboxes counter for the given SandboxSet.
+func IncSandboxesClaimedTotal(namespace, name string, count int) {
+	sandboxSetSandboxesClaimedTotal.WithLabelValues(namespace, name).Add(float64(count))
 }

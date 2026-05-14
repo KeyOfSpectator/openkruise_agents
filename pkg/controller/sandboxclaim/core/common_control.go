@@ -151,7 +151,7 @@ func (c *commonControl) EnsureClaimClaiming(ctx context.Context, args ClaimArgs)
 
 	// Step 10: Record results and determine requeue strategy
 	if claimed > 0 {
-		sandboxset.IncSandboxesClaimedTotal(claim.Namespace, claimed)
+		sandboxset.IncSandboxesClaimedTotal(sandboxSet.Namespace, sandboxSet.Name, claimed)
 		log.Info("Claimed sandboxes in this cycle",
 			"claimed", claimed,
 			"total", finalCount,

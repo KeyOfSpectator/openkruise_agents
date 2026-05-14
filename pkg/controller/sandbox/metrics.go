@@ -83,39 +83,62 @@ var (
 		[]string{"namespace", "name"},
 	)
 
-	// sandboxStatusPausedTime records the timestamp when SandboxPaused condition became True.
-	sandboxStatusPausedTime = prometheus.NewGaugeVec(
+	// sandboxStatusInplaceUpdating indicates whether the sandbox inplace update condition is False
+	// (1 when InplaceUpdate condition status is False, similar to kube_pod_status_unschedulable).
+	sandboxStatusInplaceUpdating = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandbox_status_paused_time",
-			Help: "Unix timestamp when the sandbox SandboxPaused condition transitioned to True",
+			Name: "sandbox_status_inplace_updating",
+			Help: "Whether the sandbox InplaceUpdate condition is False (1 for False, 0 otherwise)",
 		},
 		[]string{"namespace", "name"},
 	)
 
-	// sandboxStatusResumedTime records the timestamp when SandboxResumed condition became True.
-	sandboxStatusResumedTime = prometheus.NewGaugeVec(
+	// sandboxStatusInplaceUpdatingTime records the timestamp when InplaceUpdate condition became False,
+	// similar to kube_pod_status_unscheduled_time.
+	sandboxStatusInplaceUpdatingTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandbox_status_resumed_time",
-			Help: "Unix timestamp when the sandbox SandboxResumed condition transitioned to True",
+			Name: "sandbox_status_inplace_updating_time",
+			Help: "Unix timestamp when the sandbox InplaceUpdate condition transitioned to False",
 		},
 		[]string{"namespace", "name"},
 	)
 
-	// sandboxStatusInplaceUpdateDone indicates whether the sandbox inplace update condition is True
-	// (1 when InplaceUpdate condition status is True, 0 otherwise).
-	sandboxStatusInplaceUpdateDone = prometheus.NewGaugeVec(
+	// sandboxStatusUnpaused indicates whether the sandbox paused condition is False
+	// (1 when SandboxPaused condition status is False, similar to kube_pod_status_unschedulable).
+	sandboxStatusUnpaused = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandbox_status_inplace_update_done",
-			Help: "Whether the sandbox InplaceUpdate condition is True (1 for True, 0 otherwise)",
+			Name: "sandbox_status_unpaused",
+			Help: "Whether the sandbox SandboxPaused condition is False (1 for False, 0 otherwise)",
 		},
 		[]string{"namespace", "name"},
 	)
 
-	// sandboxStatusInplaceUpdateDoneTime records the timestamp when InplaceUpdate condition became True.
-	sandboxStatusInplaceUpdateDoneTime = prometheus.NewGaugeVec(
+	// sandboxStatusUnpausedTime records the timestamp when SandboxPaused condition became False,
+	// similar to kube_pod_status_unscheduled_time.
+	sandboxStatusUnpausedTime = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "sandbox_status_inplace_update_done_time",
-			Help: "Unix timestamp when the sandbox InplaceUpdate condition transitioned to True",
+			Name: "sandbox_status_unpaused_time",
+			Help: "Unix timestamp when the sandbox SandboxPaused condition transitioned to False",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusUnresumed indicates whether the sandbox resumed condition is False
+	// (1 when SandboxResumed condition status is False, similar to kube_pod_status_unschedulable).
+	sandboxStatusUnresumed = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_unresumed",
+			Help: "Whether the sandbox SandboxResumed condition is False (1 for False, 0 otherwise)",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	// sandboxStatusUnresumedTime records the timestamp when SandboxResumed condition became False,
+	// similar to kube_pod_status_unscheduled_time.
+	sandboxStatusUnresumedTime = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sandbox_status_unresumed_time",
+			Help: "Unix timestamp when the sandbox SandboxResumed condition transitioned to False",
 		},
 		[]string{"namespace", "name"},
 	)
@@ -270,10 +293,12 @@ func init() {
 		sandboxStatusPhase,
 		sandboxStatusReady,
 		sandboxStatusReadyTime,
-		sandboxStatusPausedTime,
-		sandboxStatusResumedTime,
-		sandboxStatusInplaceUpdateDone,
-		sandboxStatusInplaceUpdateDoneTime,
+		sandboxStatusInplaceUpdating,
+		sandboxStatusInplaceUpdatingTime,
+		sandboxStatusUnpaused,
+		sandboxStatusUnpausedTime,
+		sandboxStatusUnresumed,
+		sandboxStatusUnresumedTime,
 		sandboxInfo,
 		sandboxCreationDuration,
 		sandboxInplaceUpdateDuration,
@@ -436,23 +461,29 @@ func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox) {
 			}
 
 		case agentsv1alpha1.SandboxConditionInplaceUpdate:
-			recordConditionTrueMetric(condition, sandboxStatusInplaceUpdateDone, sandboxStatusInplaceUpdateDoneTime, namespace, name)
+			isUpdating := condition.Status == metav1.ConditionFalse
+			sandboxStatusInplaceUpdating.WithLabelValues(namespace, name).Set(boolFloat64(isUpdating))
+			if isUpdating {
+				sandboxStatusInplaceUpdatingTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
+			}
 			key := namespace + "/" + name
 			recordConditionDuration(condition, key, &inplaceUpdateStartTimes, &observedInplaceUpdateDurations, sandboxInplaceUpdateDuration.WithLabelValues(namespace), nil)
 
 		case agentsv1alpha1.SandboxConditionPaused:
-			// Record paused_time timestamp when condition is True
-			if condition.Status == metav1.ConditionTrue {
-				sandboxStatusPausedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
+			isUnpaused := condition.Status == metav1.ConditionFalse
+			sandboxStatusUnpaused.WithLabelValues(namespace, name).Set(boolFloat64(isUnpaused))
+			if isUnpaused {
+				sandboxStatusUnpausedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
 			}
 			key := namespace + "/" + name
 			recordConditionDuration(condition, key, &pauseStartTimes, &observedPauseDurations, sandboxPauseDuration.WithLabelValues(namespace),
 				sandboxPauseTotal.WithLabelValues(namespace, "success"))
 
 		case agentsv1alpha1.SandboxConditionResumed:
-			// Record resumed_time timestamp when condition is True
-			if condition.Status == metav1.ConditionTrue {
-				sandboxStatusResumedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
+			isUnresumed := condition.Status == metav1.ConditionFalse
+			sandboxStatusUnresumed.WithLabelValues(namespace, name).Set(boolFloat64(isUnresumed))
+			if isUnresumed {
+				sandboxStatusUnresumedTime.WithLabelValues(namespace, name).Set(float64(condition.LastTransitionTime.Unix()))
 			}
 			key := namespace + "/" + name
 			recordConditionDuration(condition, key, &resumeStartTimes, &observedResumeDurations,
@@ -469,25 +500,35 @@ func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox) {
 		}
 	}
 
-	// Detect phase/condition mismatches (abnormal states)
-	pauseAbnormal := float64(0)
-	resumeAbnormal := float64(0)
+	// Detect phase/condition mismatches (abnormal states).
+	// Only emit a series when the sandbox is in an abnormal state; delete the series
+	// once the sandbox becomes healthy again to keep only abnormal samples in Prometheus.
+	pauseAbnormal := false
+	resumeAbnormal := false
 
 	if currentPhase == agentsv1alpha1.SandboxPaused {
 		pausedCond := findCondition(sandbox.Status.Conditions, string(agentsv1alpha1.SandboxConditionPaused))
 		if pausedCond == nil || pausedCond.Status != metav1.ConditionTrue {
-			pauseAbnormal = 1
+			pauseAbnormal = true
 		}
 	}
 	if currentPhase == agentsv1alpha1.SandboxResuming {
 		resumedCond := findCondition(sandbox.Status.Conditions, string(agentsv1alpha1.SandboxConditionResumed))
 		if resumedCond == nil || resumedCond.Status != metav1.ConditionTrue {
-			resumeAbnormal = 1
+			resumeAbnormal = true
 		}
 	}
 
-	sandboxStatusAbnormal.WithLabelValues(namespace, name, "pause_incomplete").Set(pauseAbnormal)
-	sandboxStatusAbnormal.WithLabelValues(namespace, name, "resume_incomplete").Set(resumeAbnormal)
+	if pauseAbnormal {
+		sandboxStatusAbnormal.WithLabelValues(namespace, name, "pause_incomplete").Set(1)
+	} else {
+		sandboxStatusAbnormal.DeleteLabelValues(namespace, name, "pause_incomplete")
+	}
+	if resumeAbnormal {
+		sandboxStatusAbnormal.WithLabelValues(namespace, name, "resume_incomplete").Set(1)
+	} else {
+		sandboxStatusAbnormal.DeleteLabelValues(namespace, name, "resume_incomplete")
+	}
 
 	// sandbox_labels: opt-in metric controlled via --metric-labels-allowlist
 	if sandboxLabels != nil {
@@ -517,10 +558,12 @@ func deleteSandboxMetrics(namespace, name string) {
 	}
 	sandboxStatusReady.DeleteLabelValues(namespace, name)
 	sandboxStatusReadyTime.DeleteLabelValues(namespace, name)
-	sandboxStatusPausedTime.DeleteLabelValues(namespace, name)
-	sandboxStatusResumedTime.DeleteLabelValues(namespace, name)
-	sandboxStatusInplaceUpdateDone.DeleteLabelValues(namespace, name)
-	sandboxStatusInplaceUpdateDoneTime.DeleteLabelValues(namespace, name)
+	sandboxStatusInplaceUpdating.DeleteLabelValues(namespace, name)
+	sandboxStatusInplaceUpdatingTime.DeleteLabelValues(namespace, name)
+	sandboxStatusUnpaused.DeleteLabelValues(namespace, name)
+	sandboxStatusUnpausedTime.DeleteLabelValues(namespace, name)
+	sandboxStatusUnresumed.DeleteLabelValues(namespace, name)
+	sandboxStatusUnresumedTime.DeleteLabelValues(namespace, name)
 
 	// Counter metrics at namespace level are not deleted per-sandbox
 
