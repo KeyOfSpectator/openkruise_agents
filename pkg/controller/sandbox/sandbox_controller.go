@@ -227,6 +227,17 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (cr
 	// calculate sandbox status
 	var shouldRequeue bool
 	newStatus, shouldRequeue = calculateStatus(args)
+	// Emit events on sandbox phase transitions detected by calculateStatus.
+	if box.Status.Phase != newStatus.Phase {
+		switch newStatus.Phase {
+		case agentsv1alpha1.SandboxPaused:
+			r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxPausing, "Sandbox is pausing")
+		case agentsv1alpha1.SandboxUpgrading:
+			r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxUpgrading, "Sandbox upgrade started")
+		case agentsv1alpha1.SandboxResuming:
+			r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxResuming, "Sandbox is resuming")
+		}
+	}
 	if shouldRequeue {
 		// Emit event when sandbox enters Failed state
 		if newStatus.Phase == agentsv1alpha1.SandboxFailed {

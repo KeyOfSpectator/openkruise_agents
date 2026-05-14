@@ -90,7 +90,7 @@ func (r *commonControl) EnsureSandboxRunning(ctx context.Context, args EnsureFun
 		newStatus.Phase = agentsv1alpha1.SandboxRunning
 		syncSandboxStatusFromPod(pod, newStatus)
 		klog.InfoS("Sandbox transitioned to Running", "sandbox", klog.KObj(box))
-		r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxRunning, "Sandbox is now running")
+		r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxReady, "Sandbox is now Ready")
 		return 0, nil
 	}
 
@@ -242,7 +242,7 @@ func (r *commonControl) EnsureSandboxResumed(ctx context.Context, args EnsureFun
 
 		utils.SetSandboxCondition(newStatus, *rCond)
 		klog.InfoS("Sandbox resumed successfully", "sandbox", klog.KObj(box))
-		r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxResumed, "Sandbox resumed and running")
+		r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxResumed, "Sandbox resumed successfully and Ready")
 	}
 	return nil
 }
@@ -287,7 +287,6 @@ func (r *commonControl) EnsureSandboxUpgraded(ctx context.Context, args EnsureFu
 		}
 		utils.SetSandboxCondition(newStatus, *upgradeCond)
 		klog.InfoS("Sandbox upgrade started", "sandbox", klog.KObj(box))
-		r.recorder.Eventf(box, corev1.EventTypeNormal, events.SandboxUpgrading, "Sandbox upgrade started")
 	}
 
 	switch upgradeCond.Reason {

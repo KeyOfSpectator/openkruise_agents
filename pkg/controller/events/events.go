@@ -19,11 +19,12 @@ package events
 
 // Sandbox lifecycle event reasons represent state transitions and operations on individual Sandbox resources.
 const (
-	SandboxCreating        = "SandboxCreating"
 	SandboxPodCreated      = "SandboxPodCreated"
 	SandboxPodCreateFailed = "SandboxPodCreateFailed"
-	SandboxRunning         = "SandboxRunning"
+	SandboxReady           = "SandboxReady"
+	SandboxPausing         = "SandboxPausing"
 	SandboxPaused          = "SandboxPaused"
+	SandboxResuming        = "SandboxResuming"
 	SandboxResumed         = "SandboxResumed"
 	SandboxUpgrading       = "SandboxUpgrading"
 	SandboxUpgraded        = "SandboxUpgraded"

@@ -120,7 +120,7 @@ func TestSandboxLifecycleEvents(t *testing.T) {
 					Phase: corev1.PodRunning,
 				},
 			},
-			expectEvents: []string{events.SandboxRunning},
+			expectEvents: []string{events.SandboxReady},
 		},
 		{
 			name: "running sandbox with deleted pod emits SandboxFailed event",

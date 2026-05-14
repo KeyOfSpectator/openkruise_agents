@@ -29,11 +29,12 @@ func TestEventReasonConstants_Unique(t *testing.T) {
 		value string
 	}{
 		// Sandbox lifecycle events
-		{"SandboxCreating", SandboxCreating},
 		{"SandboxPodCreated", SandboxPodCreated},
 		{"SandboxPodCreateFailed", SandboxPodCreateFailed},
-		{"SandboxRunning", SandboxRunning},
+		{"SandboxReady", SandboxReady},
+		{"SandboxPausing", SandboxPausing},
 		{"SandboxPaused", SandboxPaused},
+		{"SandboxResuming", SandboxResuming},
 		{"SandboxResumed", SandboxResumed},
 		{"SandboxUpgrading", SandboxUpgrading},
 		{"SandboxUpgraded", SandboxUpgraded},
@@ -94,11 +95,12 @@ func TestEventReasonConstants_NonEmpty(t *testing.T) {
 		name  string
 		value string
 	}{
-		{"SandboxCreating", SandboxCreating},
 		{"SandboxPodCreated", SandboxPodCreated},
 		{"SandboxPodCreateFailed", SandboxPodCreateFailed},
-		{"SandboxRunning", SandboxRunning},
+		{"SandboxReady", SandboxReady},
+		{"SandboxPausing", SandboxPausing},
 		{"SandboxPaused", SandboxPaused},
+		{"SandboxResuming", SandboxResuming},
 		{"SandboxResumed", SandboxResumed},
 		{"SandboxUpgrading", SandboxUpgrading},
 		{"SandboxUpgraded", SandboxUpgraded},
