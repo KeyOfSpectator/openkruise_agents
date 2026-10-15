@@ -235,6 +235,17 @@ func (r *Reconciler) updateClaimStatus(ctx context.Context, newStatus agentsv1al
 		return err
 	}
 
+	// Keep the precise in-memory timestamps behind the persisted status: the cache
+	// stores metav1.Time at second precision, and the duration metric needs the
+	// sub-second values this process just wrote.
+	key := claim.Namespace + "/" + claim.Name
+	if newStatus.ClaimStartTime != nil {
+		storePreciseTime(&preciseClaimStartTimes, key, newStatus.ClaimStartTime.Time)
+	}
+	if newStatus.CompletionTime != nil {
+		storePreciseTime(&preciseClaimCompletionTimes, key, newStatus.CompletionTime.Time)
+	}
+
 	// Set expectation for resource version
 	core.ResourceVersionExpectations.Expect(rcvObject)
 

@@ -18,6 +18,7 @@ package sandboxclaim
 
 import (
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -104,7 +105,7 @@ var (
 			Name:        "sandbox_claim_duration_seconds",
 			Help:        "Duration of sandbox claim operations from start to completion in seconds",
 			ConstLabels: prometheus.Labels{"source": "k8s"},
-			Buckets:     prometheus.ExponentialBuckets(0.01, 2, 10), // 10ms -> ~10s, covers warm-pool sub-100ms claims
+			Buckets:     prometheus.ExponentialBuckets(0.01, 2, 16), // 10ms -> ~327.68s, covers warm-pool sub-100ms claims and cold-start claims
 		},
 		[]string{"namespace"},
 	)
@@ -119,6 +120,27 @@ var (
 // observedClaimDurations tracks which claims have already had their duration
 // observed in the histogram, preventing duplicate observations on re-reconcile.
 var observedClaimDurations sync.Map
+
+// preciseClaimStartTimes and preciseClaimCompletionTimes keep the in-memory
+// precise timestamps this process wrote for a claim. Values that round-tripped
+// through the API server are second-truncated, so durations computed from the
+// cached claim alone are quantized to whole seconds.
+var preciseClaimStartTimes sync.Map
+var preciseClaimCompletionTimes sync.Map
+
+// storePreciseTime stores t under key, keeping the first stored value and
+// replacing a second-truncated stored value with a precise one from the same
+// Unix second (a truncated cache value losing the race with an in-memory write).
+func storePreciseTime(m *sync.Map, key string, t time.Time) {
+	stored, loaded := m.LoadOrStore(key, t)
+	if !loaded {
+		return
+	}
+	prev := stored.(time.Time)
+	if prev.Nanosecond() == 0 && t.Nanosecond() != 0 && prev.Unix() == t.Unix() {
+		m.Store(key, t)
+	}
+}
 
 func init() {
 	metrics.Registry.MustRegister(
@@ -178,8 +200,19 @@ func recordSandboxClaimMetrics(claim *agentsv1alpha1.SandboxClaim) {
 		claim.Status.ClaimStartTime != nil && claim.Status.CompletionTime != nil {
 		key := namespace + "/" + name
 		if _, loaded := observedClaimDurations.LoadOrStore(key, true); !loaded {
-			duration := claim.Status.CompletionTime.Sub(claim.Status.ClaimStartTime.Time)
-			sandboxClaimClaimDuration.WithLabelValues(namespace).Observe(duration.Seconds())
+			start := claim.Status.ClaimStartTime.Time
+			done := claim.Status.CompletionTime.Time
+			if t, ok := preciseClaimStartTimes.Load(key); ok {
+				start = t.(time.Time)
+			}
+			if t, ok := preciseClaimCompletionTimes.Load(key); ok {
+				done = t.(time.Time)
+			}
+			// Ignore an ambiguous cycle instead of recording a bogus duration, e.g. a
+			// claim that completed before this process observed its start after a restart.
+			if done.After(start) {
+				sandboxClaimClaimDuration.WithLabelValues(namespace).Observe(done.Sub(start).Seconds())
+			}
 		}
 	}
 }
@@ -196,4 +229,6 @@ func deleteSandboxClaimMetrics(namespace, name string) {
 	sandboxClaimClaimedReplicas.DeleteLabelValues(namespace, name)
 	sandboxClaimDesiredReplicas.DeleteLabelValues(namespace, name)
 	observedClaimDurations.Delete(namespace + "/" + name)
+	preciseClaimStartTimes.Delete(namespace + "/" + name)
+	preciseClaimCompletionTimes.Delete(namespace + "/" + name)
 }
