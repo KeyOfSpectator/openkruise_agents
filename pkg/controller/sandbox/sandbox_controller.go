@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -240,10 +239,6 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (cr
 			core.ResourceVersionExpectations.Delete(box)
 			core.ScaleExpectation.DeleteExpectations(utils.GetControllerKey(box))
 			r.metricsCleanup.Enqueue(req.NamespacedName.Namespace, req.NamespacedName.Name)
-			// The CR being gone is the deletion signal this controller observes. Count it
-			// here, not in the async metrics GC, whose enqueues are best-effort and can be
-			// dropped without affecting the deletion count.
-			sandboxDeleteTotal.WithLabelValues(req.NamespacedName.Namespace, "success").Inc()
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
@@ -970,7 +965,7 @@ func (r *SandboxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{MaxConcurrentReconciles: concurrentReconciles}).
 		For(&agentsv1alpha1.Sandbox{}).
 		Named("sandbox-controller").
-		Watches(&agentsv1alpha1.Sandbox{}, &handler.EnqueueRequestForObject{}).
+		Watches(&agentsv1alpha1.Sandbox{}, &SandboxEventHandler{}).
 		Watches(&corev1.Pod{}, &SandboxPodEventHandler{}).
 		Watches(&agentsv1alpha1.Checkpoint{}, &CheckpointEventHandler{}).
 		Complete(r)

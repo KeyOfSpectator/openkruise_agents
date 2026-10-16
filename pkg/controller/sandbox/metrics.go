@@ -726,17 +726,22 @@ func recordSandboxMetrics(sandbox *agentsv1alpha1.Sandbox, pod *corev1.Pod) {
 	recordRuntimeContainerAbnormal(namespace, name, pod)
 }
 
+// recordSandboxDeleted records a completed sandbox deletion, called from the
+// SandboxEventHandler Delete callback. The duration is observed only when a
+// deletion start was tracked (i.e. the deletion timestamp was observed by a
+// reconcile); the counter counts every observed deletion.
+func recordSandboxDeleted(namespace, name string) {
+	if startTime, ok := deletionStartTimes.LoadAndDelete(namespace + "/" + name); ok {
+		sandboxDeleteDuration.WithLabelValues(namespace).Observe(time.Since(startTime.(time.Time)).Seconds())
+	}
+	sandboxDeleteTotal.WithLabelValues(namespace, "success").Inc()
+}
+
 // DeleteSandboxMetrics removes all metrics for a sandbox that has been deleted.
 // Exported so that the metricsasync pool (wired in cmd/agent-sandbox-controller)
 // can register it as a CleanupFunc for kind "sandbox".
 func DeleteSandboxMetrics(namespace, name string) {
-	// Observe deletion duration before cleaning up metrics
 	key := namespace + "/" + name
-	if startTime, ok := deletionStartTimes.Load(key); ok {
-		duration := time.Since(startTime.(time.Time))
-		sandboxDeleteDuration.WithLabelValues(namespace).Observe(duration.Seconds())
-		deletionStartTimes.Delete(key)
-	}
 
 	sandboxInfo.DeletePartialMatch(prometheus.Labels{"namespace": namespace, "name": name})
 	sandboxCreated.DeleteLabelValues(namespace, name)
@@ -774,6 +779,7 @@ func DeleteSandboxMetrics(namespace, name string) {
 	observedCreationFailure.Delete(key)
 	recycleStartTimes.Delete(key)
 	observedRecycleDurations.Delete(key)
+	deletionStartTimes.Delete(key)
 
 	// Clean up abnormal start-time tracking with O(1) direct deletes.
 	// The set of possible types and container names is fixed and small,

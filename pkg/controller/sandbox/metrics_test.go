@@ -1899,7 +1899,7 @@ func TestSandboxDeleteDuration(t *testing.T) {
 		verify func(t *testing.T, ns, sbName string)
 	}{
 		{
-			name: "deletion duration is observed after DeleteSandboxMetrics",
+			name: "deletion duration and counter are recorded when the deletion is observed",
 			verify: func(t *testing.T, ns, sbName string) {
 				now := time.Now()
 				delTime := metav1.NewTime(now.Add(-2 * time.Second))
@@ -1929,26 +1929,29 @@ func TestSandboxDeleteDuration(t *testing.T) {
 					t.Errorf("stored deletion start time = %v, want %v", startTime, delTime.Time)
 				}
 
-				// Before delete, histogram should have 0 samples
-				before := histogramSampleCount(t, sandboxDeleteDuration, ns)
-				if before != 0 {
-					t.Errorf("deletion duration sample count before delete = %v, want 0", before)
+				beforeCount := histogramSampleCount(t, sandboxDeleteDuration, ns)
+				beforeSum := histogramSampleSum(t, sandboxDeleteDuration, ns)
+				beforeTotal := counterValue(t, sandboxDeleteTotal, ns, "success")
+
+				// The Delete event handler records the completed deletion.
+				recordSandboxDeleted(ns, sbName)
+
+				if got := histogramSampleCount(t, sandboxDeleteDuration, ns); got != beforeCount+1 {
+					t.Errorf("deletion duration sample count = %v, want %v", got, beforeCount+1)
 				}
-
-				// Call DeleteSandboxMetrics - this observes duration then deletes the series.
-				// Since the series is deleted after observation, we verify the code path
-				// executed by checking that deletionStartTimes entry was consumed.
-				DeleteSandboxMetrics(ns, sbName)
-
-				// Verify deletionStartTimes entry was consumed (proves Observe was called)
-				_, stillExists := deletionStartTimes.Load(key)
-				if stillExists {
-					t.Errorf("deletionStartTimes should be cleaned after DeleteSandboxMetrics")
+				if delta := histogramSampleSum(t, sandboxDeleteDuration, ns) - beforeSum; delta < 2 || delta > 2.5 {
+					t.Errorf("observed deletion duration = %vs, want ~2s", delta)
+				}
+				if _, stillExists := deletionStartTimes.Load(key); stillExists {
+					t.Errorf("deletionStartTimes should be consumed after recording the deletion")
+				}
+				if got := counterValue(t, sandboxDeleteTotal, ns, "success"); got != beforeTotal+1 {
+					t.Errorf("sandbox_delete_total = %v, want %v", got, beforeTotal+1)
 				}
 			},
 		},
 		{
-			name: "no deletion duration observed without DeletionTimestamp",
+			name: "deletion without a tracked start counts but observes no duration",
 			verify: func(t *testing.T, ns, sbName string) {
 				now := time.Now()
 				sb := &agentsv1alpha1.Sandbox{
@@ -1962,11 +1965,16 @@ func TestSandboxDeleteDuration(t *testing.T) {
 				}
 				recordSandboxMetrics(sb, nil)
 
-				before := histogramSampleCount(t, sandboxDeleteDuration, ns)
-				DeleteSandboxMetrics(ns, sbName)
-				after := histogramSampleCount(t, sandboxDeleteDuration, ns)
-				if after != before {
-					t.Errorf("deletion duration should not be observed without DeletionTimestamp: before=%v, after=%v", before, after)
+				beforeCount := histogramSampleCount(t, sandboxDeleteDuration, ns)
+				beforeTotal := counterValue(t, sandboxDeleteTotal, ns, "success")
+
+				recordSandboxDeleted(ns, sbName)
+
+				if after := histogramSampleCount(t, sandboxDeleteDuration, ns); after != beforeCount {
+					t.Errorf("deletion duration should not be observed without a tracked start: before=%v, after=%v", beforeCount, after)
+				}
+				if got := counterValue(t, sandboxDeleteTotal, ns, "success"); got != beforeTotal+1 {
+					t.Errorf("sandbox_delete_total = %v, want %v", got, beforeTotal+1)
 				}
 			},
 		},

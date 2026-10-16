@@ -222,19 +222,23 @@ func TestDeleteSandboxClaimMetrics(t *testing.T) {
 
 	// Simulate the controller storing precise in-memory timestamps after a successful
 	// status patch, so the delete cleanup of both caches can be verified.
-	key := ns + "/" + name
-	storePreciseTime(&preciseClaimStartTimes, key, startTime.Time)
-	storePreciseTime(&preciseClaimCompletionTimes, key, completionTime.Time)
+	uid := string(claim.UID)
+	storePreciseTime(&preciseClaimStartTimes, uid, startTime.Time)
+	storePreciseTime(&preciseClaimCompletionTimes, uid, completionTime.Time)
+	preciseClaimUIDs.Store(ns+"/"+name, uid)
 
 	// Delete metrics
 	deleteSandboxClaimMetrics(ns, name)
 
 	// Verify precise timestamp caches are cleaned
-	if _, ok := preciseClaimStartTimes.Load(key); ok {
+	if _, ok := preciseClaimStartTimes.Load(uid); ok {
 		t.Errorf("preciseClaimStartTimes should be cleaned after delete")
 	}
-	if _, ok := preciseClaimCompletionTimes.Load(key); ok {
+	if _, ok := preciseClaimCompletionTimes.Load(uid); ok {
 		t.Errorf("preciseClaimCompletionTimes should be cleaned after delete")
+	}
+	if _, ok := preciseClaimUIDs.Load(ns + "/" + name); ok {
+		t.Errorf("preciseClaimUIDs should be cleaned after delete")
 	}
 
 	// After deletion, WithLabelValues creates a new zero-value gauge.
@@ -370,6 +374,7 @@ func TestRecordSandboxClaimMetrics_PreciseDuration(t *testing.T) {
 
 	tests := []struct {
 		name         string
+		preciseUID   string
 		preciseStart *time.Time
 		preciseDone  *time.Time
 		statusStart  time.Time
@@ -414,13 +419,25 @@ func TestRecordSandboxClaimMetrics_PreciseDuration(t *testing.T) {
 			wantCount:   1,
 			wantSum:     1,
 		},
+		{
+			// Precise timestamps are keyed by claim UID because names are reused;
+			// values stored under another claim's UID must not be inherited, and
+			// the duration falls back to the status timestamps.
+			name:         "precise times under a different uid are not inherited",
+			preciseUID:   "other-claim-uid",
+			preciseStart: ptr.To(base.Add(100 * time.Millisecond)),
+			preciseDone:  ptr.To(base.Add(750 * time.Millisecond)),
+			statusStart:  base,
+			statusDone:   base.Add(2 * time.Second),
+			wantCount:    1,
+			wantSum:      2,
+		},
 	}
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ns := fmt.Sprintf("claim-dur-precise-%d", i)
 			name := "precise-claim"
-			key := ns + "/" + name
 			claim := &agentsv1alpha1.SandboxClaim{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              name,
@@ -440,13 +457,21 @@ func TestRecordSandboxClaimMetrics_PreciseDuration(t *testing.T) {
 				},
 			}
 
+			storeKey := string(claim.UID)
+			if tt.preciseUID != "" {
+				storeKey = tt.preciseUID
+			}
 			if tt.preciseStart != nil {
-				storePreciseTime(&preciseClaimStartTimes, key, *tt.preciseStart)
+				storePreciseTime(&preciseClaimStartTimes, storeKey, *tt.preciseStart)
 			}
 			if tt.preciseDone != nil {
-				storePreciseTime(&preciseClaimCompletionTimes, key, *tt.preciseDone)
+				storePreciseTime(&preciseClaimCompletionTimes, storeKey, *tt.preciseDone)
 			}
-			defer deleteSandboxClaimMetrics(ns, name)
+			defer func() {
+				deleteSandboxClaimMetrics(ns, name)
+				preciseClaimStartTimes.Delete(storeKey)
+				preciseClaimCompletionTimes.Delete(storeKey)
+			}()
 
 			recordSandboxClaimMetrics(claim)
 			for j := 0; j < tt.extraCalls; j++ {
