@@ -240,6 +240,10 @@ func (r *SandboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (cr
 			core.ResourceVersionExpectations.Delete(box)
 			core.ScaleExpectation.DeleteExpectations(utils.GetControllerKey(box))
 			r.metricsCleanup.Enqueue(req.NamespacedName.Namespace, req.NamespacedName.Name)
+			// The CR being gone is the deletion signal this controller observes. Count it
+			// here, not in the async metrics GC, whose enqueues are best-effort and can be
+			// dropped without affecting the deletion count.
+			sandboxDeleteTotal.WithLabelValues(req.NamespacedName.Namespace, "success").Inc()
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}

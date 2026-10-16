@@ -6623,6 +6623,8 @@ func TestReconcile_NotFoundEnqueuesAsyncCleanup(t *testing.T) {
 		metricsCleanup: enq,
 	}
 
+	beforeCount := counterValue(t, sandboxDeleteTotal, "ns", "success")
+
 	res, err := r.Reconcile(context.Background(), reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: "ns", Name: "missing"},
 	})
@@ -6633,6 +6635,9 @@ func TestReconcile_NotFoundEnqueuesAsyncCleanup(t *testing.T) {
 	assert.Len(t, calls, 1)
 	assert.Equal(t, "ns", calls[0].Namespace)
 	assert.Equal(t, "missing", calls[0].Name)
+
+	assert.Equal(t, beforeCount+1, counterValue(t, sandboxDeleteTotal, "ns", "success"),
+		"detecting a deleted Sandbox CR should increment sandbox_delete_total")
 }
 
 func TestHasPVCVolumes(t *testing.T) {

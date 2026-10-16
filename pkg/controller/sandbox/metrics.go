@@ -735,7 +735,6 @@ func DeleteSandboxMetrics(namespace, name string) {
 	if startTime, ok := deletionStartTimes.Load(key); ok {
 		duration := time.Since(startTime.(time.Time))
 		sandboxDeleteDuration.WithLabelValues(namespace).Observe(duration.Seconds())
-		sandboxDeleteTotal.WithLabelValues(namespace, "success").Inc()
 		deletionStartTimes.Delete(key)
 	}
 
